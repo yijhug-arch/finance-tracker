@@ -667,20 +667,20 @@
         // Separate income and spending
         const spending = transactions.filter(t => {
           const isIncome = t.category === 'Income & Refunds' || 
-                          t.merchant.toLowerCase().includes('received') ||
-                          t.rawEmail.toLowerCase().includes('received a transfer');
+                          (t.merchant && t.merchant.toLowerCase().includes('received')) ||
+                          (t.rawEmail && t.rawEmail.toLowerCase().includes('received a transfer'));
           return !isIncome;
         });
         
         const income = transactions.filter(t => {
           const isIncome = t.category === 'Income & Refunds' || 
-                          t.merchant.toLowerCase().includes('received') ||
-                          t.rawEmail.toLowerCase().includes('received a transfer');
+                          (t.merchant && t.merchant.toLowerCase().includes('received')) ||
+                          (t.rawEmail && t.rawEmail.toLowerCase().includes('received a transfer'));
           return isIncome;
         });
         
-        const totalSpending = spending.reduce((sum, t) => sum + t.amount, 0);
-        const totalIncome = income.reduce((sum, t) => sum + t.amount, 0);
+        const totalSpending = spending.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalIncome = income.reduce((sum, t) => sum + (t.amount || 0), 0);
         const netCashflow = totalIncome - totalSpending;
         
         const thisMonth = transactions.filter(t => {
@@ -689,14 +689,16 @@
         });
         const monthSpending = thisMonth.filter(t => {
           const isIncome = t.category === 'Income & Refunds' || 
-                          t.merchant.toLowerCase().includes('received') ||
-                          t.rawEmail.toLowerCase().includes('received a transfer');
+                          (t.merchant && t.merchant.toLowerCase().includes('received')) ||
+                          (t.rawEmail && t.rawEmail.toLowerCase().includes('received a transfer'));
           return !isIncome;
-        }).reduce((sum, t) => sum + t.amount, 0);
+        }).reduce((sum, t) => sum + (t.amount || 0), 0);
         
         const categoryTotals = {};
         spending.forEach(t => {
-          categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+          if (t.category) {
+            categoryTotals[t.category] = (categoryTotals[t.category] || 0) + (t.amount || 0);
+          }
         });
         
         return { 
@@ -950,16 +952,16 @@
                         <tbody>
                           {transactions.slice(0, 20).map((t, idx) => {
                             const isIncome = t.category === 'Income & Refunds' || 
-                                           t.merchant.toLowerCase().includes('received') ||
-                                           t.rawEmail.toLowerCase().includes('received a transfer');
+                                           (t.merchant && t.merchant.toLowerCase().includes('received')) ||
+                                           (t.rawEmail && t.rawEmail.toLowerCase().includes('received a transfer'));
                             return (
                               <tr key={idx}>
-                                <td>{t.date.toLocaleDateString()}</td>
-                                <td>{t.merchant}</td>
-                                <td><span className="category-badge">{t.category}</span></td>
-                                <td>{t.bank}</td>
+                                <td>{t.date ? t.date.toLocaleDateString() : 'N/A'}</td>
+                                <td>{t.merchant || 'Unknown'}</td>
+                                <td><span className="category-badge">{t.category || 'Others'}</span></td>
+                                <td>{t.bank || 'N/A'}</td>
                                 <td className={isIncome ? "amount-positive" : "amount-negative"}>
-                                  {isIncome ? '+' : '-'}${t.amount.toFixed(2)}
+                                  {isIncome ? '+' : '-'}${(t.amount || 0).toFixed(2)}
                                 </td>
                               </tr>
                             );
