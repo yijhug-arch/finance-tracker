@@ -3,182 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker - SG 2026</title>
+    <title>Finance Tracker</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-        body { margin: 0; padding: 0; background: #0C1220; }
-        * { box-sizing: border-box; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        body { margin: 0; padding: 0; background: #0C1220; color: #E2E8F0; font-family: 'DM Sans', sans-serif; }
+        .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        .card { background: #111D2E; border: 1px solid #1B2A3D; border-radius: 12px; padding: 20px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #0C1220; border: 1px solid #1B2A3D; color: white; border-radius: 8px; }
+        button { width: 100%; padding: 12px; background: #339AF0; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // Use window prefix to ensure global access
-        const { useState, useEffect, useMemo } = window.React;
-        const { 
-            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-            ResponsiveContainer, PieChart, Pie, Cell, Legend 
-        } = window.Recharts;
-        const _ = window._;
-
-        // --- DATABASE & CONFIG ---
-        const CARDS = {
-            "DBS Live Fresh": { bank: "DBS", type: "cashback", fee: 194, min: 600, rewards: { "Online Services": { r: 0.05, cap: 20 }, Entertainment: { r: 0.05, cap: 20 }, Dining: { r: 0.05, cap: 20 }, Shopping: { r: 0.05, cap: 20 }, _d: { r: 0.003 } } },
-            "DBS Altitude": { bank: "DBS", type: "miles", fee: 193, min: 0, rewards: { Travel: { r: 3.0 }, _d: { r: 1.2 } } },
-            "OCBC 365": { bank: "OCBC", type: "cashback", fee: 194, min: 800, rewards: { Dining: { r: 0.06, cap: 80 }, Groceries: { r: 0.03, cap: 80 }, Transport: { r: 0.03, cap: 80 }, Petrol: { r: 0.229, cap: 25 }, _d: { r: 0.003 } } },
-            "UOB One": { bank: "UOB", type: "cashback", fee: 193, min: 500, rewards: { _all: { r: 0.10, cap: 50 }, _d: { r: 0.003 } } },
-            "AMEX True Cashback": { bank: "AMEX", type: "cashback", fee: 0, min: 0, rewards: { _all: { r: 0.015 }, _d: { r: 0.015 } } }
-        };
+        // Ensure we grab libraries from the global window object
+        const { useState, useEffect, useMemo } = React;
+        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } = Recharts;
 
         const CAT_CFG = {
-            Dining: { col: "#FF6B6B", ico: "🍽️" }, Groceries: { col: "#51CF66", ico: "🛒" },
-            Transport: { col: "#339AF0", ico: "🚗" }, Shopping: { col: "#F06595", ico: "🛍️" },
-            Entertainment: { col: "#845EF7", ico: "🎬" }, Fitness: { col: "#20C997", ico: "💪" },
-            Healthcare: { col: "#FF8787", ico: "🏥" }, Travel: { col: "#FCC419", ico: "✈️" },
-            "Income & Refunds": { col: "#69DB7C", ico: "💰" }, Others: { col: "#868E96", ico: "📦" }
+            Dining: { col: "#FF6B6B", ico: "🍽️" },
+            Groceries: { col: "#51CF66", ico: "🛒" },
+            Others: { col: "#868E96", ico: "📦" }
         };
 
-        // FIXED SYNTAX (No optional chaining ?.)
+        // FIXED: Removed ?. to support older Babel versions
         const gc = (c) => (CAT_CFG[c] && CAT_CFG[c].col) ? CAT_CFG[c].col : "#868E96";
         const gi = (c) => (CAT_CFG[c] && CAT_CFG[c].ico) ? CAT_CFG[c].ico : "•";
 
-        // --- HELPERS ---
-        function parseDate(raw) {
-            if (!raw) return null;
-            const s = String(raw).trim();
-            const m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
-            if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-            const d = new Date(s);
-            return isNaN(d) ? null : d;
-        }
-
-        function parseTxns(rows) {
-            if (!rows || rows.length < 2) return [];
-            return rows.slice(1).map((r) => {
-                const date = parseDate(r[0]), amount = parseFloat(r[4]);
-                if (!date || isNaN(amount) || amount <= 0) return null;
-                return {
-                    date, bank: r[1] || "", merchant: r[3] || "Unknown",
-                    amount, category: r[5] || "Others",
-                    type: r[5] === "Income & Refunds" ? "income" : "spending",
-                };
-            }).filter(Boolean);
-        }
-
-        // --- MAIN APP ---
         function App() {
-            const [txns, setTxns] = useState([]);
-            const [loading, setLoading] = useState(false);
             const [sid, setSid] = useState(localStorage.getItem("ft_sid") || "");
             const [apiKey, setApiKey] = useState(localStorage.getItem("ft_key") || "");
-            const [showSetup, setShowSetup] = useState(!localStorage.getItem("ft_sid"));
-            const [tab, setTab] = useState("overview");
+            const [isSetup, setIsSetup] = useState(!localStorage.getItem("ft_sid"));
 
-            const fetchData = async () => {
-                if (!sid || !apiKey) return;
-                setLoading(true);
-                try {
-                    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`);
-                    const d = await r.json();
-                    if (d.values) setTxns(parseTxns(d.values));
-                } catch (e) { console.error(e); }
-                setLoading(false);
-            };
-
-            useEffect(() => { if (!showSetup) fetchData(); }, [showSetup]);
-
-            const saveConnect = () => {
+            const handleSave = () => {
                 localStorage.setItem("ft_sid", sid);
                 localStorage.setItem("ft_key", apiKey);
-                setShowSetup(false);
+                setIsSetup(false);
             };
 
-            const stats = useMemo(() => {
-                const sp = txns.filter(t => t.type !== 'income');
-                const inc = txns.filter(t => t.type === 'income');
-                const totalSp = _.sumBy(sp, 'amount');
-                const totalInc = _.sumBy(inc, 'amount');
-                const cats = {};
-                sp.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
-                return { totalSp, totalInc, cats, net: totalInc - totalSp };
-            }, [txns]);
+            if (isSetup) {
+                return (
+                    <div className="container">
+                        <div className="card">
+                            <h2>Setup Finance Tracker</h2>
+                            <input placeholder="Google Sheet ID" value={sid} onChange={e => setSid(e.target.value)} />
+                            <input placeholder="API Key" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} />
+                            <button onClick={handleSave}>Connect</button>
+                        </div>
+                    </div>
+                );
+            }
 
-            if (showSetup) return (
-                <div style={{...st.page, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                    <div style={{...st.card, width: 400}}>
-                        <h2 style={st.secH}>Connect Google Sheets</h2>
-                        <input style={st.input} placeholder="Sheet ID" value={sid} onChange={e => setSid(e.target.value)} />
-                        <input style={{...st.input, marginTop: 10}} type="password" placeholder="API Key" value={apiKey} onChange={e => setApiKey(e.target.value)} />
-                        <button style={{...st.btnPrimary, width: '100%', marginTop: 20}} onClick={saveConnect}>Launch Tracker</button>
+            return (
+                <div className="container">
+                    <h1>Finance Tracker Live</h1>
+                    <div className="card">
+                        <p>Connected to Sheet: {sid.substring(0, 5)}...</p>
+                        <button onClick={() => setIsSetup(true)}>Change Settings</button>
                     </div>
                 </div>
             );
-
-            return (
-                <div style={st.page}>
-                    <header style={st.header}>
-                        <span style={st.logoText}>Finance Tracker 2026</span>
-                        <nav style={{display: 'flex', gap: 10}}>
-                            <button onClick={() => setTab('overview')} style={{...st.navBtn, ...(tab === 'overview' ? st.navBtnActive : {})}}>OVERVIEW</button>
-                            <button onClick={() => setTab('txns')} style={{...st.navBtn, ...(tab === 'txns' ? st.navBtnActive : {})}}>TXNS</button>
-                            <button onClick={() => setShowSetup(true)} style={st.iconBtn}>⚙</button>
-                        </nav>
-                    </header>
-                    <main style={st.main}>
-                        <div style={st.kpiGrid}>
-                            <div style={{...st.kpiCard, background: '#FF6B6B22'}}>
-                                <div style={st.kpiLabel}>Spending</div>
-                                <div style={st.kpiValue}>${stats.totalSp.toFixed(2)}</div>
-                            </div>
-                            <div style={{...st.kpiCard, background: '#51CF6622'}}>
-                                <div style={st.kpiLabel}>Income</div>
-                                <div style={{...st.kpiValue, color: '#51CF66'}}>${stats.totalInc.toFixed(2)}</div>
-                            </div>
-                        </div>
-                        <div style={st.card}>
-                            <h3 style={st.cardH}>Breakdown</h3>
-                            <div style={{height: 300}}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={Object.entries(stats.cats).map(([name, value]) => ({name, value}))} innerRadius={60} outerRadius={100} dataKey="value">
-                                            {Object.keys(stats.cats).map((c, i) => <Cell key={i} fill={gc(c)} />)}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    </main>
-                </div>
-            );
         }
-
-        const st = {
-            page: { minHeight: "100vh", background: "#0C1220", color: "#E2E8F0", fontFamily: "'DM Sans', sans-serif" },
-            header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 25px", borderBottom: "1px solid #1B2A3D", background: "#111D2E" },
-            logoText: { fontSize: 18, fontWeight: 800, color: "#339AF0" },
-            navBtn: { padding: "8px 15px", background: "none", border: "none", color: "#5A6B80", cursor: "pointer", fontWeight: 600, fontSize: 12 },
-            navBtnActive: { color: "#E2E8F0", background: "#1B2A3D", borderRadius: 6 },
-            main: { padding: "25px", maxWidth: "800px", margin: "0 auto" },
-            card: { background: "#111D2E", border: "1px solid #1B2A3D", borderRadius: 14, padding: 20, marginBottom: 20 },
-            kpiGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15, marginBottom: 20 },
-            kpiCard: { padding: 20, borderRadius: 12 },
-            kpiValue: { fontSize: 22, fontWeight: 800 },
-            kpiLabel: { fontSize: 11, color: "#8A9BB5", textTransform: 'uppercase', marginBottom: 5 },
-            input: { width: "100%", padding: "12px", background: "#0C1220", border: "1px solid #1B2A3D", borderRadius: 8, color: "#fff", outline: 'none' },
-            btnPrimary: { padding: "12px", background: "#339AF0", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: 'pointer' },
-            secH: { fontSize: 20, marginBottom: 15 }
-        };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
