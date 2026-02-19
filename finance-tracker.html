@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Tracker - SG 2026</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
+        body { margin: 0; padding: 0; background: #0C1220; }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #243247; border-radius: 3px; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
+            ResponsiveContainer, PieChart, Pie, Cell, Legend 
+        } = Recharts;
+
+        // --- DATABASE & CONFIG ---
+        const CARDS = {
+            "DBS Live Fresh": { bank: "DBS", type: "cashback", fee: 194, min: 600, rewards: { "Online Services": { r: 0.05, cap: 20 }, Entertainment: { r: 0.05, cap: 20 }, Dining: { r: 0.05, cap: 20 }, Shopping: { r: 0.05, cap: 20 }, _d: { r: 0.003 } } },
+            "DBS Altitude": { bank: "DBS", type: "miles", fee: 193, min: 0, rewards: { Travel: { r: 3.0 }, _d: { r: 1.2 } } },
+            "OCBC 365": { bank: "OCBC", type: "cashback", fee: 194, min: 800, rewards: { Dining: { r: 0.06, cap: 80 }, Groceries: { r: 0.03, cap: 80 }, Transport: { r: 0.03, cap: 80 }, Petrol: { r: 0.229, cap: 25 }, _d: { r: 0.003 } } },
+            "UOB One": { bank: "UOB", type: "cashback", fee: 193, min: 500, note: "5 txns + salary credit to UOB", rewards: { _all: { r: 0.10, cap: 50 }, _d: { r: 0.003 } } },
+            "UOB PRVI Miles": { bank: "UOB", type: "miles", fee: 257, min: 0, rewards: { Travel: { r: 2.4 }, Dining: { r: 2.4 }, _d: { r: 1.4 } } },
+            "Citi Cash Back+": { bank: "Citi", type: "cashback", fee: 194, min: 800, rewards: { Dining: { r: 0.08, cap: 25 }, Groceries: { r: 0.08, cap: 25 }, Petrol: { r: 0.08, cap: 25 }, _d: { r: 0.003 } } },
+            "HSBC Revolution": { bank: "HSBC", type: "cashback", fee: 0, min: 0, rewards: { Dining: { r: 0.04 }, "Online Services": { r: 0.04 }, Entertainment: { r: 0.04 }, _d: { r: 0.003 } } },
+            "AMEX True Cashback": { bank: "AMEX", type: "cashback", fee: 0, min: 0, rewards: { _all: { r: 0.015 }, _d: { r: 0.015 } } },
+            "SC Simply Cash": { bank: "SC", type: "cashback", fee: 193, min: 0, rewards: { Dining: { r: 0.06, cap: 60 }, Groceries: { r: 0.06, cap: 60 }, Petrol: { r: 0.06, cap: 60 }, _d: { r: 0.015 } } },
+        };
+
+        const CAT_CFG = {
+            Dining: { col: "#FF6B6B", ico: "🍽️" }, Groceries: { col: "#51CF66", ico: "🛒" },
+            Transport: { col: "#339AF0", ico: "🚗" }, Shopping: { col: "#F06595", ico: "🛍️" },
+            Entertainment: { col: "#845EF7", ico: "🎬" }, Fitness: { col: "#20C997", ico: "💪" },
+            Healthcare: { col: "#FF8787", ico: "🏥" }, Insurance: { col: "#868E96", ico: "🛡️" },
+            Utilities: { col: "#22B8CF", ico: "⚡" }, Travel: { col: "#FCC419", ico: "✈️" },
+            Petrol: { col: "#94D82D", ico: "⛽" }, "Online Services": { col: "#BE4BDB", ico: "💻" },
+            "Bills & Payments": { col: "#ADB5BD", ico: "📄" }, Transfers: { col: "#74C0FC", ico: "🔄" },
+            Education: { col: "#4DABF7", ico: "📚" }, Government: { col: "#FA5252", ico: "🏛️" },
+            "Income & Refunds": { col: "#69DB7C", ico: "💰" }, "ATM Cash": { col: "#FFD43B", ico: "🏧" },
+            Others: { col: "#868E96", ico: "📦" },
+        };
+
+        const gc = (c) => CAT_CFG[c]?.col || "#868E96";
+        const gi = (c) => CAT_CFG[c]?.ico || "•";
+
+        // --- HELPERS ---
+        function parseDate(raw) {
+            if (!raw) return null;
+            const s = String(raw).trim();
+            const m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
+            if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+            const d = new Date(s);
+            return isNaN(d) ? null : d;
+        }
+
+        function parseTxns(rows) {
+            if (!rows || rows.length < 2) return [];
+            return rows.slice(1).map((r) => {
+                const date = parseDate(r[0]), amount = parseFloat(r[4]);
+                if (!date || isNaN(amount) || amount <= 0) return null;
+                return {
+                    date, bank: r[1] || "", merchant: r[3] || "Unknown",
+                    amount, category: r[5] || "Others", currency: r[9] || "SGD",
+                    type: r[10] || (r[5] === "Income & Refunds" ? "income" : "spending"),
+                };
+            }).filter(Boolean);
+        }
+
+        function detectLeakages(txns, income) {
+            const sp = txns.filter((t) => t.type !== "income");
+            const out = [];
+            const mc = _.countBy(sp, "merchant");
+            Object.entries(mc).filter(([, c]) => c >= 3).forEach(([m, c]) => {
+                const tot = _.sumBy(sp.filter((t) => t.merchant === m), "amount");
+                if (tot > 30) out.push({ sev: tot > 100 ? "high" : "med", title: `Recurring: ${m}`, desc: `${c} transactions total $${tot.toFixed(2)}.`, amt: tot });
+            });
+            return _.orderBy(out, "amt", "desc");
+        }
+
+        function recCards(cats, total) {
+            return _.orderBy(Object.entries(CARDS).map(([name, c]) => {
+                let val = 0; const bens = [];
+                Object.entries(cats).forEach(([cat, amt]) => {
+                    const rw = c.rewards[cat] || c.rewards._all || c.rewards._d;
+                    if (!rw) return;
+                    let e = amt * rw.r; if (rw.cap) e = Math.min(e, rw.cap); val += e;
+                });
+                return { name, bank: c.bank, net: val - c.fee / 12, ok: !c.min || total >= c.min };
+            }), "net", "desc").slice(0, 5);
+        }
+
+        // --- COMPONENTS ---
+        const ChartTooltip = ({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            return (
+                <div style={{ background: "#162032", border: "1px solid #243247", borderRadius: 10, padding: "10px", boxShadow: "0 8px 24px rgba(0,0,0,.4)" }}>
+                    <div style={{ fontSize: 11, color: "#5A6B80" }}>{label}</div>
+                    {payload.map((p, i) => (
+                        <div key={i} style={{ fontSize: 13, color: p.color, fontWeight: 600 }}>{p.name}: ${p.value.toFixed(2)}</div>
+                    ))}
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        function App() {
+            const [txns, setTxns] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [sid, setSid] = useState(localStorage.getItem("ft_sid") || "");
+            const [apiKey, setApiKey] = useState(localStorage.getItem("ft_key") || "");
+            const [showSetup, setShowSetup] = useState(!localStorage.getItem("ft_sid"));
+            const [tab, setTab] = useState("overview");
+
+            const fetchData = async () => {
+                if (!sid || !apiKey) return;
+                setLoading(true);
+                try {
+                    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`);
+                    const d = await r.json();
+                    if (d.values) setTxns(parseTxns(d.values));
+                } catch (e) { alert("Failed to fetch data"); }
+                setLoading(false);
+            };
+
+            useEffect(() => { if (!showSetup) fetchData(); }, [showSetup]);
+
+            const saveConnect = () => {
+                localStorage.setItem("ft_sid", sid);
+                localStorage.setItem("ft_key", apiKey);
+                setShowSetup(false);
+            };
+
+            const stats = useMemo(() => {
+                const sp = txns.filter(t => t.type !== 'income');
+                const inc = txns.filter(t => t.type === 'income');
+                const totalSp = _.sumBy(sp, 'amount');
+                const totalInc = _.sumBy(inc, 'amount');
+                const cats = {};
+                sp.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
+                return { totalSp, totalInc, cats, net: totalInc - totalSp };
+            }, [txns]);
+
+            const leaks = useMemo(() => detectLeakages(txns, stats.totalInc), [txns, stats.totalInc]);
+
+            if (showSetup) return (
+                <div style={{...st.page, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    <div style={{...st.card, width: 400}}>
+                        <h2 style={st.secH}>Connect Google Sheets</h2>
+                        <input style={st.input} placeholder="Sheet ID" value={sid} onChange={e => setSid(e.target.value)} />
+                        <input style={{...st.input, marginTop: 10}} type="password" placeholder="API Key" value={apiKey} onChange={e => setApiKey(e.target.value)} />
+                        <button style={{...st.btnPrimary, width: '100%', marginTop: 20}} onClick={saveConnect}>Launch Tracker</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div style={st.page}>
+                    <header style={st.header}>
+                        <span style={st.logoText}>Finance Tracker 2026</span>
+                        <nav style={{display: 'flex', gap: 10}}>
+                            {['overview', 'leakages', 'txns'].map(t => (
+                                <button key={t} onClick={() => setTab(t)} style={{...st.navBtn, ...(tab === t ? st.navBtnActive : {})}}>{t.toUpperCase()}</button>
+                            ))}
+                            <button onClick={() => setShowSetup(true)} style={st.iconBtn}>⚙</button>
+                        </nav>
+                    </header>
+
+                    <main style={st.main}>
+                        {tab === 'overview' && (
+                            <div style={{animation: 'fadeUp 0.5s ease'}}>
+                                <div style={st.kpiGrid}>
+                                    <div style={{...st.kpiCard, background: '#FF6B6B22'}}>
+                                        <div style={st.kpiLabel}>Spending</div>
+                                        <div style={st.kpiValue}>${stats.totalSp.toFixed(2)}</div>
+                                    </div>
+                                    <div style={{...st.kpiCard, background: '#51CF6622'}}>
+                                        <div style={st.kpiLabel}>Income</div>
+                                        <div style={{...st.kpiValue, color: '#51CF66'}}>${stats.totalInc.toFixed(2)}</div>
+                                    </div>
+                                    <div style={{...st.kpiCard, background: '#339AF022'}}>
+                                        <div style={st.kpiLabel}>Net Cashflow</div>
+                                        <div style={st.kpiValue}>${stats.net.toFixed(2)}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style={st.card}>
+                                    <h3 style={st.cardH}>Category Breakdown</h3>
+                                    <div style={{height: 300}}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie data={Object.entries(stats.cats).map(([name, value]) => ({name, value}))} innerRadius={60} outerRadius={100} dataKey="value">
+                                                    {Object.keys(stats.cats).map((c, i) => <Cell key={i} fill={gc(c)} />)}
+                                                </Pie>
+                                                <Tooltip content={<ChartTooltip />} />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === 'leakages' && (
+                            <div>
+                                <h2 style={st.secH}>Detected Leakages</h2>
+                                {leaks.map((l, i) => (
+                                    <div key={i} style={st.leakItem}>
+                                        <div style={{fontWeight: 'bold', color: l.sev === 'high' ? '#FF6B6B' : '#FCC419'}}>{l.title}</div>
+                                        <div style={st.muted}>{l.desc}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {tab === 'txns' && (
+                            <div style={st.tableWrap}>
+                                <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                                    <thead>
+                                        <tr><th style={st.th}>Date</th><th style={st.th}>Merchant</th><th style={st.th}>Amount</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {txns.slice(0, 50).map((t, i) => (
+                                            <tr key={i}>
+                                                <td style={st.td}>{t.date.toLocaleDateString()}</td>
+                                                <td style={st.td}>{t.merchant}</td>
+                                                <td style={{...st.td, color: t.type === 'income' ? '#51CF66' : '#FF6B6B'}}>${t.amount.toFixed(2)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const st = {
+            page: { minHeight: "100vh", background: "#0C1220", color: "#E2E8F0", fontFamily: "'DM Sans', sans-serif" },
+            header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 25px", borderBottom: "1px solid #1B2A3D", background: "#111D2E" },
+            logoText: { fontSize: 18, fontWeight: 800, color: "#339AF0" },
+            navBtn: { padding: "8px 15px", background: "none", border: "none", color: "#5A6B80", cursor: "pointer", fontWeight: 600, fontSize: 12 },
+            navBtnActive: { color: "#E2E8F0", background: "#1B2A3D", borderRadius: 6 },
+            main: { padding: "25px", maxWidth: "1000px", margin: "0 auto" },
+            card: { background: "#111D2E", border: "1px solid #1B2A3D", borderRadius: 14, padding: 20, marginBottom: 20 },
+            kpiGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 15, marginBottom: 20 },
+            kpiCard: { padding: 20, borderRadius: 12 },
+            kpiValue: { fontSize: 22, fontWeight: 800 },
+            kpiLabel: { fontSize: 11, color: "#8A9BB5", textTransform: 'uppercase', marginBottom: 5 },
+            input: { width: "100%", padding: "12px", background: "#0C1220", border: "1px solid #1B2A3D", borderRadius: 8, color: "#fff", outline: 'none' },
+            btnPrimary: { padding: "12px", background: "#339AF0", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: 'pointer' },
+            tableWrap: { background: "#111D2E", borderRadius: 12, overflow: "hidden" },
+            th: { textAlign: 'left', padding: 12, background: '#1B2A3D', fontSize: 12 },
+            td: { padding: 12, borderBottom: '1px solid #1B2A3D', fontSize: 13 },
+            leakItem: { padding: 15, background: '#111D2E', borderLeft: '4px solid #FF6B6B', marginBottom: 10, borderRadius: 4 },
+            muted: { fontSize: 12, color: '#8A9BB5' }
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
