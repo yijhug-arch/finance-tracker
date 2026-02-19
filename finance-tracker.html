@@ -4,195 +4,205 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finance Tracker - SG 2026</title>
-    
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-        
-        :root {
-            --bg: #0C1220;
-            --card: #111D2E;
-            --border: #1B2A3D;
-            --accent: #339AF0;
-            --text: #E2E8F0;
-            --text-dim: #8A9BB5;
-        }
-
-        body { 
-            margin: 0; 
-            background: var(--bg); 
-            color: var(--text); 
-            font-family: 'DM Sans', sans-serif;
-        }
-
-        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
-        
-        .header { 
-            display: flex; justify-content: space-between; align-items: center; 
-            margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 20px;
-        }
-
-        .logo { font-size: 22px; font-weight: 800; color: var(--accent); }
-
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        
-        .card { 
-            background: var(--card); border: 1px solid var(--border); 
-            border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .kpi-card { text-align: left; }
-        .kpi-label { font-size: 11px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-        .kpi-value { font-size: 28px; font-weight: 800; margin-top: 5px; }
-
-        input { 
-            width: 100%; padding: 14px; margin: 10px 0; background: var(--bg); 
-            border: 1px solid var(--border); border-radius: 10px; color: white; outline: none;
-        }
-
-        button { 
-            padding: 12px 24px; background: var(--accent); color: white; 
-            border: none; border-radius: 10px; font-weight: 700; cursor: pointer;
-        }
-
-        .table-wrap { overflow-x: auto; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-dim); padding: 12px; border-bottom: 1px solid var(--border); }
-        td { padding: 12px; border-bottom: 1px solid rgba(27,42,61,0.5); font-size: 14px; }
-        
-        .neg { color: #FF6B6B; }
-        .pos { color: #51CF66; }
+        :root { --bg: #0C1220; --card: #111D2E; --border: #1B2A3D; --accent: #339AF0; --text: #E2E8F0; --text-dim: #8A9BB5; --pos: #51CF66; --neg: #FF6B6B; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .logo { font-size: 20px; font-weight: 800; color: var(--accent); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+        .label { font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .val { font-size: 24px; font-weight: 800; }
+        .sub-val { font-size: 12px; margin-top: 4px; color: var(--text-dim); }
+        .rec-item { padding: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .rec-item:last-child { border-bottom: none; }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: rgba(51, 154, 240, 0.1); color: var(--accent); }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: white; }
+        button { padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        .chart-container { height: 250px; position: relative; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th { text-align: left; color: var(--text-dim); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        td { padding: 10px 0; border-bottom: 1px solid rgba(27,42,61,0.4); }
     </style>
 </head>
 <body>
     <div id="root"></div>
-
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
-        // Visual helper for charts
-        const ChartComponent = ({ data }) => {
-            const canvasRef = useRef(null);
-            const chartRef = useRef(null);
+        const CARD_DB = {
+            "DBS Live Fresh": { min: 600, categories: ["Online Services", "Dining", "Shopping"], rate: 0.05 },
+            "OCBC 365": { min: 800, categories: ["Dining", "Groceries", "Transport", "Petrol"], rate: 0.06 },
+            "UOB One": { min: 500, categories: ["All"], rate: 0.033 },
+            "HSBC Revolution": { min: 0, categories: ["Dining", "Online Services", "Travel"], rate: 0.04 },
+            "Citi Cash Back+": { min: 0, categories: ["All"], rate: 0.016 }
+        };
 
+        const ChartComp = ({ data }) => {
+            const ref = useRef(null);
+            const chart = useRef(null);
             useEffect(() => {
-                if (chartRef.current) chartRef.current.destroy();
-                const ctx = canvasRef.current.getContext('2d');
-                chartRef.current = new Chart(ctx, {
+                if (chart.current) chart.current.destroy();
+                chart.current = new Chart(ref.current.getContext('2d'), {
                     type: 'doughnut',
-                    data: {
-                        labels: Object.keys(data),
-                        datasets: [{
-                            data: Object.values(data),
-                            backgroundColor: ['#FF6B6B', '#339AF0', '#51CF66', '#FCC419', '#845EF7', '#ADB5BD'],
-                            borderWidth: 0,
-                            hoverOffset: 10
-                        }]
-                    },
-                    options: { plugins: { legend: { position: 'bottom', labels: { color: '#8A9BB5', usePointStyle: true } } }, cutout: '70%' }
+                    data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#FF6B6B', '#339AF0', '#51CF66', '#FCC419', '#845EF7'], borderWidth: 0 }] },
+                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '75%' }
                 });
             }, [data]);
-
-            return <canvas ref={canvasRef} />;
+            return <canvas ref={ref} />;
         };
 
         function App() {
             const [sid, setSid] = useState(localStorage.getItem("ft_sid") || "");
             const [apiKey, setApiKey] = useState(localStorage.getItem("ft_key") || "");
             const [isSetup, setIsSetup] = useState(!localStorage.getItem("ft_sid"));
-            const [data, setData] = useState([]);
-            const [loading, setLoading] = useState(false);
+            const [txns, setTxns] = useState([]);
 
-            const fetchData = async () => {
-                if (!sid || !apiKey) return;
-                setLoading(true);
-                try {
-                    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`;
-                    const res = await fetch(url);
-                    const json = await res.json();
-                    if (json.values) {
-                        const rows = json.values.slice(1).map(r => ({
-                            date: r[0], merchant: r[3], amount: parseFloat(r[4]) || 0, category: r[5] || 'Others'
-                        }));
-                        setData(rows);
-                    }
-                } catch (e) { console.error("Error fetching data", e); }
-                setLoading(false);
+            const parseDate = (str) => {
+                const parts = str.split(' ')[0].split('/');
+                return new Date(parts[2], parts[1] - 1, parts[0]);
             };
 
-            useEffect(() => { if (!isSetup) fetchData(); }, [isSetup]);
+            const fetchData = async () => {
+                try {
+                    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`);
+                    const json = await res.json();
+                    if (json.values) {
+                        const parsed = json.values.slice(1).map(r => ({
+                            date: parseDate(r[0]), merchant: r[3], amount: parseFloat(r[4].replace(/,/g, '')),
+                            cat: r[5], type: r[10] || 'spending'
+                        })).filter(t => !isNaN(t.amount));
+                        setTxns(parsed);
+                    }
+                } catch (e) { console.error(e); }
+            };
 
-            const totals = data.reduce((acc, curr) => {
-                acc.total += curr.amount;
-                acc.cats[curr.category] = (acc.cats[curr.category] || 0) + curr.amount;
-                return acc;
-            }, { total: 0, cats: {} });
+            useEffect(() => { if(!isSetup) fetchData(); }, [isSetup]);
 
-            if (isSetup) {
-                return (
-                    <div className="container" style={{display: 'flex', justifyContent: 'center'}}>
-                        <div className="card" style={{width: '400px', marginTop: '10vh'}}>
-                            <div className="logo" style={{marginBottom: '20px'}}>Finance Engine</div>
-                            <label className="kpi-label">Google Sheet ID</label>
-                            <input value={sid} onChange={e => setSid(e.target.value)} placeholder="Enter Sheet ID" />
-                            <label className="kpi-label">API Key</label>
-                            <input value={apiKey} type="password" onChange={e => setApiKey(e.target.value)} placeholder="Enter API Key" />
-                            <button onClick={() => { localStorage.setItem("ft_sid", sid); localStorage.setItem("ft_key", apiKey); setIsSetup(false); }}>Launch App</button>
-                        </div>
+            const stats = useMemo(() => {
+                const now = new Date(2026, 1, 19); // Today based on your data
+                const mtd = txns.filter(t => t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear());
+                const ytd = txns.filter(t => t.date.getFullYear() === now.getFullYear());
+
+                const calc = (list) => ({
+                    spend: _.sumBy(list.filter(t => t.type === 'spending'), 'amount'),
+                    income: _.sumBy(list.filter(t => t.type === 'income'), 'amount')
+                });
+
+                const catBreakdown = _.mapValues(_.groupBy(mtd.filter(t => t.type === 'spending'), 'cat'), l => _.sumBy(l, 'amount'));
+                
+                // Card Recommendations logic
+                const recs = Object.entries(CARD_DB).map(([name, cfg]) => {
+                    let potential = 0;
+                    Object.entries(catBreakdown).forEach(([c, val]) => {
+                        if (cfg.categories.includes(c) || cfg.categories.includes("All")) potential += val * cfg.rate;
+                    });
+                    return { name, potential, meetsMin: (cfg.min <= calc(mtd).spend) };
+                }).sort((a,b) => b.potential - a.potential);
+
+                // Leakage detection
+                const leakages = Object.entries(_.groupBy(txns, 'merchant'))
+                    .map(([m, l]) => ({ m, count: l.length, total: _.sumBy(l, 'amount') }))
+                    .filter(x => x.count >= 2 && x.total > 20 && x.m !== 'DBS Bank Ltd')
+                    .sort((a,b) => b.total - a.total);
+
+                return { mtd: calc(mtd), ytd: calc(ytd), catBreakdown, recs, leakages };
+            }, [txns]);
+
+            if (isSetup) return (
+                <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+                    <div className="card" style={{width: '350px'}}>
+                        <div className="logo" style={{marginBottom: '20px'}}>Finance Engine</div>
+                        <input value={sid} onChange={e => setSid(e.target.value)} placeholder="Sheet ID" />
+                        <input value={apiKey} type="password" onChange={e => setApiKey(e.target.value)} placeholder="API Key" />
+                        <button style={{width: '100%'}} onClick={() => { localStorage.setItem("ft_sid", sid); localStorage.setItem("ft_key", apiKey); setIsSetup(false); }}>Connect</button>
                     </div>
-                );
-            }
+                </div>
+            );
 
             return (
                 <div className="container">
                     <header className="header">
-                        <div className="logo">Finance Tracker <span style={{fontSize: '12px', color: 'var(--text-dim)'}}>v2026</span></div>
-                        <button style={{background: 'var(--card)', border: '1px solid var(--border)'}} onClick={() => setIsSetup(true)}>Settings</button>
+                        <div className="logo">Finance Dashboard <span style={{fontSize: '11px', color: 'var(--text-dim)'}}>FEB 2026</span></div>
+                        <button style={{background: 'var(--card)', border: '1px solid var(--border)', fontSize: '11px'}} onClick={() => setIsSetup(true)}>CONFIGURE</button>
                     </header>
 
-                    <div className="kpi-grid">
-                        <div className="card kpi-card">
-                            <div className="kpi-label">Total Spending</div>
-                            <div className="kpi-value">${totals.total.toFixed(2)}</div>
+                    <div className="grid">
+                        <div className="card">
+                            <div className="label">Month to Date Spend</div>
+                            <div className="val" style={{color: 'var(--neg)'}}>${stats.mtd.spend.toFixed(2)}</div>
+                            <div className="sub-val">Income: <span style={{color: 'var(--pos)'}}>${stats.mtd.income.toFixed(2)}</span></div>
                         </div>
-                        <div className="card kpi-card">
-                            <div className="kpi-label">Transactions</div>
-                            <div className="kpi-value">{data.length}</div>
+                        <div className="card">
+                            <div className="label">Year to Date Spend</div>
+                            <div className="val">${stats.ytd.spend.toFixed(2)}</div>
+                            <div className="sub-val">Net: ${(stats.ytd.income - stats.ytd.spend).toFixed(2)}</div>
+                        </div>
+                        <div className="card">
+                            <div className="label">Top Category</div>
+                            <div className="val">{Object.keys(stats.catBreakdown)[0] || 'N/A'}</div>
+                            <div className="sub-val">Largest outflow this month</div>
                         </div>
                     </div>
 
-                    <div style={{display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px'}}>
+                    <div className="grid" style={{gridTemplateColumns: '1.2fr 1.8fr'}}>
                         <div className="card">
-                            <div className="kpi-label">Recent Transactions</div>
-                            <div className="table-wrap">
-                                <table>
-                                    <thead><tr><th>Date</th><th>Merchant</th><th>Amount</th></tr></thead>
-                                    <tbody>
-                                        {data.slice(0, 8).map((t, i) => (
-                                            <tr key={i}>
-                                                <td>{t.date}</td>
-                                                <td style={{fontWeight: 600}}>{t.merchant}</td>
-                                                <td className="neg">-${t.amount.toFixed(2)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className="label">Spend Breakdown</div>
+                            <div className="chart-container"><ChartComp data={stats.catBreakdown} /></div>
+                            <div style={{marginTop: '15px'}}>
+                                {Object.entries(stats.catBreakdown).map(([c, v]) => (
+                                    <div key={c} style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '4px 0'}}>
+                                        <span>{c}</span><span style={{fontWeight: 700}}>${v.toFixed(2)}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                         <div className="card">
-                            <div className="kpi-label">Category Breakdown</div>
-                            <div style={{marginTop: '20px'}}><ChartComponent data={totals.cats} /></div>
+                            <div className="label">Smart Card Optimizer</div>
+                            <p style={{fontSize: '11px', color: 'var(--text-dim)', marginBottom: '15px'}}>Based on your MTD spending patterns:</p>
+                            {stats.recs.slice(0,4).map(r => (
+                                <div key={r.name} className="rec-item">
+                                    <div>
+                                        <div style={{fontSize: '14px', fontWeight: 700}}>{r.name}</div>
+                                        <div style={{fontSize: '11px', color: r.meetsMin ? 'var(--pos)' : 'var(--neg)'}}>
+                                            {r.meetsMin ? '✓ Min spend met' : '× Below min spend'}
+                                        </div>
+                                    </div>
+                                    <div style={{textAlign: 'right'}}>
+                                        <div className="badge">+${r.potential.toFixed(2)} back</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid">
+                        <div className="card">
+                            <div className="label">Leakage Alerts (Recurring/High Freq)</div>
+                            <table>
+                                <thead><tr><th>Merchant</th><th>Count</th><th>Total Drain</th></tr></thead>
+                                <tbody>
+                                    {stats.leakages.slice(0,5).map(l => (
+                                        <tr key={l.m}>
+                                            <td>{l.m}</td>
+                                            <td>{l.count}x</td>
+                                            <td style={{fontWeight: 700}}>${l.total.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
             );
         }
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
