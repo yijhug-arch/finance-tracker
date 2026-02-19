@@ -1,210 +1,664 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker - SG 2026</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-        :root { --bg: #0C1220; --card: #111D2E; --border: #1B2A3D; --accent: #339AF0; --text: #E2E8F0; --text-dim: #8A9BB5; --pos: #51CF66; --neg: #FF6B6B; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
-        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
-        .logo { font-size: 20px; font-weight: 800; color: var(--accent); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 25px; }
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
-        .label { font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
-        .val { font-size: 24px; font-weight: 800; }
-        .sub-val { font-size: 12px; margin-top: 4px; color: var(--text-dim); }
-        .rec-item { padding: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .rec-item:last-child { border-bottom: none; }
-        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: rgba(51, 154, 240, 0.1); color: var(--accent); }
-        input { width: 100%; padding: 12px; margin: 10px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: white; }
-        button { padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
-        .chart-container { height: 250px; position: relative; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-        th { text-align: left; color: var(--text-dim); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-        td { padding: 10px 0; border-bottom: 1px solid rgba(27,42,61,0.4); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Tracker</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0B1120;--surface:#101C2E;--border:#182740;--hover:#162236;--text:#E2E8F0;--dim:#5C7089;--accent:#2F8AF5;--green:#3DDB85;--red:#FF5C5C;--yellow:#FACC15;--purple:#A78BFA;--pink:#F472B6}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',system-ui,sans-serif;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+@keyframes enter{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:enter .45s cubic-bezier(.22,1,.36,1) both}
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+input{font-family:inherit;outline:none}
+</style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
-        const CARD_DB = {
-            "DBS Live Fresh": { min: 600, categories: ["Online Services", "Dining", "Shopping"], rate: 0.05 },
-            "OCBC 365": { min: 800, categories: ["Dining", "Groceries", "Transport", "Petrol"], rate: 0.06 },
-            "UOB One": { min: 500, categories: ["All"], rate: 0.033 },
-            "HSBC Revolution": { min: 0, categories: ["Dining", "Online Services", "Travel"], rate: 0.04 },
-            "Citi Cash Back+": { min: 0, categories: ["All"], rate: 0.016 }
-        };
+/* ═══════════════════════════════════════════
+   CREDIT CARD DATABASE (SG 2025 verified)
+   ═══════════════════════════════════════════ */
+const CARDS={
+  "DBS Live Fresh":{bank:"DBS",type:"cashback",fee:194,min:600,rewards:{
+    "Online Services":{r:.05,cap:20},Entertainment:{r:.05,cap:20},Dining:{r:.05,cap:20},Shopping:{r:.05,cap:20},_d:{r:.003}}},
+  "DBS Altitude":{bank:"DBS",type:"miles",fee:193,min:0,rewards:{Travel:{r:3.0},_d:{r:1.2}}},
+  "OCBC 365":{bank:"OCBC",type:"cashback",fee:194,min:800,rewards:{
+    Dining:{r:.06,cap:80},Groceries:{r:.03,cap:80},Transport:{r:.03,cap:80},Petrol:{r:.229,cap:25},_d:{r:.003}}},
+  "UOB One":{bank:"UOB",type:"cashback",fee:193,min:500,note:"5 txns + salary to UOB",rewards:{_all:{r:.10,cap:50},_d:{r:.003}}},
+  "UOB PRVI Miles":{bank:"UOB",type:"miles",fee:257,min:0,rewards:{Travel:{r:2.4},Dining:{r:2.4},_d:{r:1.4}}},
+  "Citi Cash Back+":{bank:"Citi",type:"cashback",fee:194,min:800,rewards:{
+    Dining:{r:.08,cap:25},Groceries:{r:.08,cap:25},Petrol:{r:.08,cap:25},_d:{r:.003}}},
+  "HSBC Revolution":{bank:"HSBC",type:"cashback",fee:0,min:0,rewards:{
+    Dining:{r:.04},Entertainment:{r:.04},"Online Services":{r:.04},_d:{r:.003}}},
+  "AMEX True Cashback":{bank:"AMEX",type:"cashback",fee:0,min:0,rewards:{_all:{r:.015},_d:{r:.015}}},
+  "SC Simply Cash":{bank:"SC",type:"cashback",fee:193,min:0,rewards:{
+    Dining:{r:.06,cap:60},Groceries:{r:.06,cap:60},Petrol:{r:.06,cap:60},_d:{r:.015}}},
+};
 
-        const ChartComp = ({ data }) => {
-            const ref = useRef(null);
-            const chart = useRef(null);
-            useEffect(() => {
-                if (chart.current) chart.current.destroy();
-                chart.current = new Chart(ref.current.getContext('2d'), {
-                    type: 'doughnut',
-                    data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#FF6B6B', '#339AF0', '#51CF66', '#FCC419', '#845EF7'], borderWidth: 0 }] },
-                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '75%' }
-                });
-            }, [data]);
-            return <canvas ref={ref} />;
-        };
+/* ═══════════════════════════════════════════
+   CATEGORY STYLING
+   ═══════════════════════════════════════════ */
+const CC={
+  Dining:{c:"#FF6B6B",i:"🍽️"},Groceries:{c:"#51CF66",i:"🛒"},Transport:{c:"#339AF0",i:"🚗"},
+  Shopping:{c:"#F06595",i:"🛍️"},Entertainment:{c:"#845EF7",i:"🎬"},Fitness:{c:"#20C997",i:"💪"},
+  Healthcare:{c:"#FF8787",i:"🏥"},Insurance:{c:"#868E96",i:"🛡️"},Utilities:{c:"#22B8CF",i:"⚡"},
+  Travel:{c:"#FCC419",i:"✈️"},Petrol:{c:"#94D82D",i:"⛽"},"Online Services":{c:"#BE4BDB",i:"💻"},
+  "Bills & Payments":{c:"#ADB5BD",i:"📄"},Transfers:{c:"#74C0FC",i:"🔄"},Education:{c:"#4DABF7",i:"📚"},
+  Government:{c:"#FA5252",i:"🏛️"},"Advertising & Marketing":{c:"#E599F7",i:"📢"},
+  "Income & Refunds":{c:"#69DB7C",i:"💰"},"ATM Cash":{c:"#FFD43B",i:"🏧"},Others:{c:"#868E96",i:"📦"},
+};
+const gc=c=>CC[c]?.c||"#868E96";
+const gi=c=>CC[c]?.i||"•";
 
-        function App() {
-            const [sid, setSid] = useState(localStorage.getItem("ft_sid") || "");
-            const [apiKey, setApiKey] = useState(localStorage.getItem("ft_key") || "");
-            const [isSetup, setIsSetup] = useState(!localStorage.getItem("ft_sid"));
-            const [txns, setTxns] = useState([]);
+/* ═══════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════ */
+function parseDate(raw){
+  if(!raw)return null;
+  const s=String(raw).trim();
+  const m=s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0));
+  const d=new Date(s);return isNaN(d)?null:d;
+}
 
-            const parseDate = (str) => {
-                const parts = str.split(' ')[0].split('/');
-                return new Date(parts[2], parts[1] - 1, parts[0]);
-            };
+function parseTxns(rows){
+  if(!rows||rows.length<2)return[];
+  return rows.slice(1).map(r=>{
+    const date=parseDate(r[0]),amount=parseFloat(String(r[4]||"").replace(/,/g,""));
+    if(!date||isNaN(amount)||amount<=0)return null;
+    return{date,bank:r[1]||"",card:r[2]||"",merchant:r[3]||"Unknown",amount,
+      category:r[5]||"Others",notes:r[7]||"",currency:r[9]||"SGD",
+      type:r[10]||(r[5]==="Income & Refunds"?"income":"spending")};
+  }).filter(Boolean);
+}
 
-            const fetchData = async () => {
-                try {
-                    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`);
-                    const json = await res.json();
-                    if (json.values) {
-                        const parsed = json.values.slice(1).map(r => ({
-                            date: parseDate(r[0]), merchant: r[3], amount: parseFloat(r[4].replace(/,/g, '')),
-                            cat: r[5], type: r[10] || 'spending'
-                        })).filter(t => !isNaN(t.amount));
-                        setTxns(parsed);
-                    }
-                } catch (e) { console.error(e); }
-            };
+const fmtD=n=>n.toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtK=n=>n>=1000?`${(n/1000).toFixed(1)}k`:n.toFixed(0);
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-            useEffect(() => { if(!isSetup) fetchData(); }, [isSetup]);
+/* ═══════════════════════════════════════════
+   LEAKAGE DETECTION
+   ═══════════════════════════════════════════ */
+function detectLeakages(txns,income){
+  const sp=txns.filter(t=>t.type!=="income"),out=[];
+  // Recurring merchants
+  const mc=_.countBy(sp,"merchant");
+  Object.entries(mc).filter(([,c])=>c>=3).forEach(([m,c])=>{
+    const tot=_.sumBy(sp.filter(t=>t.merchant===m),"amount"),avg=tot/c;
+    if(avg<50&&tot>30)out.push({sev:tot>100?"high":"med",title:`Recurring: ${m}`,
+      desc:`${c} txns averaging $${avg.toFixed(2)}, total $${tot.toFixed(2)}.`,amt:tot});
+  });
+  // Discretionary overspend
+  const disc=["Dining","Entertainment","Shopping","Online Services"];
+  const dt=_.sumBy(sp.filter(t=>disc.includes(t.category)),"amount");
+  if(income>0&&dt/income>.3)out.push({sev:"high",title:"Discretionary > 30% of income",
+    desc:`$${dt.toFixed(0)} on non-essentials (${((dt/income)*100).toFixed(0)}% of income).`,amt:dt});
+  // Dining frequency
+  const din=sp.filter(t=>t.category==="Dining");
+  if(din.length>15){const t=_.sumBy(din,"amount");out.push({sev:"med",
+    title:`Dining out ${din.length}× this period`,
+    desc:`$${t.toFixed(0)} total. Cooking more could save ~$${(t*.25).toFixed(0)}.`,amt:t*.25});}
+  // Foreign currency fees
+  const fx=sp.filter(t=>t.currency&&t.currency!=="SGD");
+  if(fx.length){const t=_.sumBy(fx,"amount"),f=t*.035;out.push({sev:"med",
+    title:`${fx.length} foreign currency txns`,desc:`~$${f.toFixed(0)} in fees on $${t.toFixed(0)} foreign spend.`,amt:f});}
+  return _.orderBy(out,"amt","desc");
+}
 
-            const stats = useMemo(() => {
-                const now = new Date(2026, 1, 19); // Today based on your data
-                const mtd = txns.filter(t => t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear());
-                const ytd = txns.filter(t => t.date.getFullYear() === now.getFullYear());
+/* ═══════════════════════════════════════════
+   CARD RECOMMENDER
+   ═══════════════════════════════════════════ */
+function recCards(cats,total){
+  return _.orderBy(Object.entries(CARDS).map(([name,c])=>{
+    let val=0;const bens=[];
+    Object.entries(cats).forEach(([cat,amt])=>{
+      const rw=c.rewards[cat]||c.rewards._all||c.rewards._d;if(!rw)return;
+      if(c.type==="cashback"){let e=amt*rw.r;if(rw.cap)e=Math.min(e,rw.cap);val+=e;
+        if(rw.r>=.03)bens.push({cat,rate:`${(rw.r*100).toFixed(0)}%`,earn:`$${e.toFixed(2)}`,cap:rw.cap});}
+      else{const mi=amt*rw.r,dv=mi*.018;val+=dv;
+        if(rw.r>=1.5)bens.push({cat,rate:`${rw.r} mpd`,earn:`${mi.toFixed(0)} mi`});}
+    });
+    return{name,bank:c.bank,type:c.type,val,net:val-c.fee/12,fee:c.fee,min:c.min,
+      ok:!c.min||total>=c.min,bens:bens.slice(0,5),note:c.note};
+  }),"net","desc").slice(0,5);
+}
 
-                const calc = (list) => ({
-                    spend: _.sumBy(list.filter(t => t.type === 'spending'), 'amount'),
-                    income: _.sumBy(list.filter(t => t.type === 'income'), 'amount')
-                });
+/* ═══════════════════════════════════════════
+   DONUT CHART COMPONENT
+   ═══════════════════════════════════════════ */
+function Donut({data,title,hole}){
+  const ref=useRef(null),chart=useRef(null);
+  const labels=data.map(d=>d.name),values=data.map(d=>d.value),colors=data.map(d=>d.color);
+  useEffect(()=>{
+    if(!ref.current)return;
+    if(chart.current)chart.current.destroy();
+    chart.current=new Chart(ref.current.getContext("2d"),{
+      type:"doughnut",
+      data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:0,hoverBorderWidth:2,hoverBorderColor:"#fff",hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:hole||"68%",
+        plugins:{legend:{display:false},tooltip:{backgroundColor:"#162032",titleColor:"#E2E8F0",bodyColor:"#8A9BB5",
+          borderColor:"#243247",borderWidth:1,cornerRadius:8,padding:10,
+          callbacks:{label:ctx=>`  ${ctx.label}: $${fmtD(ctx.raw)}`}}},
+        animation:{animateRotate:true,duration:700}}
+    });
+    return()=>{if(chart.current)chart.current.destroy()};
+  },[JSON.stringify(data)]);
+  return(<div style={{position:"relative"}}>
+    <div style={{height:210}}><canvas ref={ref}/></div>
+    {title&&<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",pointerEvents:"none"}}>
+      <div style={{fontSize:10,color:"#5C7089",fontWeight:700,letterSpacing:".8px",textTransform:"uppercase"}}>{title.label}</div>
+      <div style={{fontSize:22,fontWeight:800,color:title.color||"#E2E8F0",marginTop:2}}>{title.value}</div>
+    </div>}
+  </div>);
+}
 
-                const catBreakdown = _.mapValues(_.groupBy(mtd.filter(t => t.type === 'spending'), 'cat'), l => _.sumBy(l, 'amount'));
-                
-                // Card Recommendations logic
-                const recs = Object.entries(CARD_DB).map(([name, cfg]) => {
-                    let potential = 0;
-                    Object.entries(catBreakdown).forEach(([c, val]) => {
-                        if (cfg.categories.includes(c) || cfg.categories.includes("All")) potential += val * cfg.rate;
-                    });
-                    return { name, potential, meetsMin: (cfg.min <= calc(mtd).spend) };
-                }).sort((a,b) => b.potential - a.potential);
+/* ═══════════════════════════════════════════
+   BAR CHART COMPONENT
+   ═══════════════════════════════════════════ */
+function BarComp({data,keys,colors,labels}){
+  const ref=useRef(null),chart=useRef(null);
+  useEffect(()=>{
+    if(!ref.current)return;
+    if(chart.current)chart.current.destroy();
+    chart.current=new Chart(ref.current.getContext("2d"),{
+      type:"bar",
+      data:{labels:data.map(d=>d.label),datasets:keys.map((k,i)=>({
+        label:labels?.[i]||k,data:data.map(d=>d[k]),backgroundColor:colors[i],borderRadius:4,barPercentage:.7}))},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{x:{grid:{display:false},ticks:{color:"#5C7089",font:{size:11}}},
+          y:{grid:{color:"#182740",drawBorder:false},ticks:{color:"#5C7089",font:{size:10},callback:v=>"$"+fmtK(v)}}},
+        plugins:{legend:{position:"bottom",labels:{color:"#8A9BB5",font:{size:11},padding:16,usePointStyle:true,pointStyleWidth:8}},
+          tooltip:{backgroundColor:"#162032",titleColor:"#E2E8F0",bodyColor:"#8A9BB5",borderColor:"#243247",borderWidth:1,cornerRadius:8,padding:10,
+            callbacks:{label:ctx=>`  ${ctx.dataset.label}: $${fmtD(ctx.raw)}`}}},
+        animation:{duration:600}}
+    });
+    return()=>{if(chart.current)chart.current.destroy()};
+  },[JSON.stringify(data)]);
+  return <div style={{height:260}}><canvas ref={ref}/></div>;
+}
 
-                // Leakage detection
-                const leakages = Object.entries(_.groupBy(txns, 'merchant'))
-                    .map(([m, l]) => ({ m, count: l.length, total: _.sumBy(l, 'amount') }))
-                    .filter(x => x.count >= 2 && x.total > 20 && x.m !== 'DBS Bank Ltd')
-                    .sort((a,b) => b.total - a.total);
+/* ═══════════════════════════════════════════
+   DEMO DATA
+   ═══════════════════════════════════════════ */
+function genDemo(){
+  const now=new Date();
+  const items=[
+    ["Din Tai Fung","Dining",45.8],["NTUC FairPrice","Groceries",67.3],["Grab","Transport",12.5],
+    ["Netflix","Entertainment",15.98],["Starbucks","Dining",8.9],["Shell","Petrol",85],
+    ["Guardian","Healthcare",23.4],["Shopee","Shopping",34.5],["SP Services","Utilities",120],
+    ["Singtel","Utilities",45],["Klook","Travel",250],["ActiveSG","Fitness",2.5],
+    ["AIA","Insurance",180],["McDonald's","Dining",9.5],["Cold Storage","Groceries",55.2],
+    ["Spotify","Entertainment",9.99],["Grab","Transport",15.3],["Toast Box","Dining",6.8],
+    ["Amazon","Shopping",42],["Comfort Taxi","Transport",18],
+    ["Salary","Income & Refunds",5200],["PayNow from Mum","Income & Refunds",500],["Shopee Refund","Income & Refunds",15],
+    ["Starbucks","Dining",7.5],["Starbucks","Dining",8.2],["Adobe","Online Services",28],
+    ["Crystal Jade","Dining",38],["NTUC FairPrice","Groceries",82.1],["OCBC ATM","ATM Cash",200],
+    ["Anthropic","Online Services",5.45],
+  ];
+  return items.map(([m,c,a],i)=>{const d=new Date(now);d.setDate(d.getDate()-Math.floor(i*1.05));
+    return{date:d,bank:["DBS","UOB","OCBC"][i%3],card:["3115","0076","4949"][i%3],merchant:m,amount:a,
+      category:c,notes:"",currency:i===29?"USD":"SGD",type:c==="Income & Refunds"?"income":"spending"};});
+}
 
-                return { mtd: calc(mtd), ytd: calc(ytd), catBreakdown, recs, leakages };
-            }, [txns]);
+/* ═══════════════════════════════════════════
+   MAIN APP
+   ═══════════════════════════════════════════ */
+function App(){
+  const[txns,setTxns]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[sid,setSid]=useState("");
+  const[apiKey,setApiKey]=useState("");
+  const[showSetup,setShowSetup]=useState(true);
+  const[isDemo,setIsDemo]=useState(false);
+  const[err,setErr]=useState("");
+  const[tab,setTab]=useState("dashboard");
+  const[period,setPeriod]=useState("mtd");
+  const[selMonth,setSelMonth]=useState(new Date().getMonth());
 
-            if (isSetup) return (
-                <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
-                    <div className="card" style={{width: '350px'}}>
-                        <div className="logo" style={{marginBottom: '20px'}}>Finance Engine</div>
-                        <input value={sid} onChange={e => setSid(e.target.value)} placeholder="Sheet ID" />
-                        <input value={apiKey} type="password" onChange={e => setApiKey(e.target.value)} placeholder="API Key" />
-                        <button style={{width: '100%'}} onClick={() => { localStorage.setItem("ft_sid", sid); localStorage.setItem("ft_key", apiKey); setIsSetup(false); }}>Connect</button>
-                    </div>
+  // Restore saved credentials
+  useEffect(()=>{
+    try{const a=localStorage.getItem("ft_sid"),b=localStorage.getItem("ft_key");
+      if(a&&b){setSid(a);setApiKey(b);setShowSetup(false);}
+    }catch(e){}
+  },[]);
+
+  useEffect(()=>{if(sid&&apiKey&&!showSetup&&!isDemo)fetchData();},[sid,apiKey,showSetup]);
+
+  const saveConnect=()=>{
+    if(!sid.trim()||!apiKey.trim()){setErr("Both fields are required");return;}
+    try{localStorage.setItem("ft_sid",sid.trim());localStorage.setItem("ft_key",apiKey.trim());}catch(e){}
+    setShowSetup(false);setIsDemo(false);setErr("");
+  };
+
+  const fetchData=async()=>{
+    setLoading(true);setErr("");
+    try{
+      const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Transactions?key=${apiKey}`);
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const d=await r.json();
+      if(d.values){setTxns(parseTxns(d.values));}
+      else setErr("No data in Transactions sheet");
+    }catch(e){setErr(`Connection failed: ${e.message}`);}
+    setLoading(false);
+  };
+
+  const startDemo=()=>{setTxns(genDemo());setIsDemo(true);setShowSetup(false);setErr("");};
+
+  // ── Global period filter ──
+  const filtered=useMemo(()=>{
+    const now=new Date(),y=now.getFullYear(),m=now.getMonth();
+    if(period==="mtd")return txns.filter(t=>t.date.getMonth()===m&&t.date.getFullYear()===y);
+    if(period==="ytd")return txns.filter(t=>t.date.getFullYear()===y);
+    if(period==="month")return txns.filter(t=>t.date.getMonth()===selMonth&&t.date.getFullYear()===y);
+    return txns;
+  },[txns,period,selMonth]);
+
+  // ── All computed stats from filtered ──
+  const stats=useMemo(()=>{
+    const sp=filtered.filter(t=>t.type!=="income"),inc=filtered.filter(t=>t.type==="income");
+    const totalSp=_.sumBy(sp,"amount"),totalInc=_.sumBy(inc,"amount");
+    // Category breakdown (spending)
+    const spCats={};sp.forEach(t=>{spCats[t.category]=(spCats[t.category]||0)+t.amount;});
+    // Income breakdown by merchant (source)
+    const incSources={};inc.forEach(t=>{incSources[t.merchant]=(incSources[t.merchant]||0)+t.amount;});
+    // Monthly trend
+    const byMonth=_.groupBy(txns,t=>`${t.date.getFullYear()}-${String(t.date.getMonth()+1).padStart(2,"0")}`);
+    const trend=Object.entries(byMonth).sort(([a],[b])=>a.localeCompare(b)).map(([m,items])=>({
+      label:MONTHS[parseInt(m.split("-")[1])-1]||m.slice(5),
+      income:_.sumBy(items.filter(i=>i.type==="income"),"amount"),
+      spending:_.sumBy(items.filter(i=>i.type!=="income"),"amount"),
+    }));
+    // Daily spending last 14 days
+    const daily=[];
+    const last14=sp.filter(t=>t.date>=new Date(Date.now()-14*864e5));
+    const byDay=_.groupBy(last14,t=>t.date.toISOString().slice(0,10));
+    for(let i=13;i>=0;i--){const dd=new Date(Date.now()-i*864e5).toISOString().slice(0,10);
+      daily.push({label:dd.slice(8)+"/"+dd.slice(5,7),spending:_.sumBy(byDay[dd]||[],"amount")});}
+    // Top merchants
+    const topMerch=Object.entries(_.groupBy(sp,"merchant")).map(([m,ts])=>({
+      merchant:m,total:_.sumBy(ts,"amount"),count:ts.length,cat:ts[0].category
+    })).sort((a,b)=>b.total-a.total).slice(0,8);
+    return{totalSp,totalInc,net:totalInc-totalSp,spCnt:sp.length,incCnt:inc.length,
+      spCats,incSources,trend,daily,topMerch,avg:sp.length?totalSp/sp.length:0};
+  },[filtered,txns]);
+
+  const leaks=useMemo(()=>detectLeakages(filtered,stats.totalInc||5000),[filtered,stats.totalInc]);
+  const recs=useMemo(()=>recCards(stats.spCats,stats.totalSp),[stats.spCats,stats.totalSp]);
+
+  const sortedSpCats=useMemo(()=>Object.entries(stats.spCats).sort(([,a],[,b])=>b-a).filter(([,v])=>v>0),[stats.spCats]);
+  const sortedIncSources=useMemo(()=>Object.entries(stats.incSources).sort(([,a],[,b])=>b-a).filter(([,v])=>v>0),[stats.incSources]);
+
+  const budgetPct=stats.totalInc>0?Math.min(100,(stats.totalSp/stats.totalInc)*100):0;
+  const periodLabel=period==="mtd"?"Month to Date":period==="ytd"?"Year to Date":period==="month"?MONTHS[selMonth]+" "+new Date().getFullYear():"All Time";
+
+  /* ═══════════════════════════
+     SETUP SCREEN
+     ═══════════════════════════ */
+  if(showSetup)return(
+    <div style={S.page}>
+      <div style={{maxWidth:440,margin:"0 auto",padding:"100px 24px"}}>
+        <div style={{textAlign:"center",marginBottom:48}} className="fade-in">
+          <svg width="44" height="44" viewBox="0 0 28 28" fill="none" style={{marginBottom:12}}>
+            <rect x="2" y="14" width="5" height="12" rx="1.5" fill="#FF6B6B"/><rect x="9" y="8" width="5" height="18" rx="1.5" fill="#FCC419"/>
+            <rect x="16" y="3" width="5" height="23" rx="1.5" fill="#51CF66"/><rect x="23" y="10" width="5" height="16" rx="1.5" fill="#339AF0" opacity=".4"/>
+          </svg>
+          <h1 style={{fontSize:28,fontWeight:800,color:"#E2E8F0",letterSpacing:"-.5px"}}>Finance Tracker</h1>
+          <p style={{color:"#5C7089",fontSize:14,marginTop:6}}>Connect your Google Sheet to begin</p>
+        </div>
+        <div style={S.card} className="fade-in" >
+          {err&&<div style={S.errBox}>{err}</div>}
+          <label style={S.label}>Google Sheet ID</label>
+          <input style={S.input} value={sid} onChange={e=>setSid(e.target.value)} placeholder="e.g. 1BxiMVs0XRA5ngkz..."/>
+          <label style={{...S.label,marginTop:16}}>API Key</label>
+          <input style={S.input} type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="AIza..."/>
+          <div style={{display:"flex",gap:10,marginTop:24}}>
+            <button style={S.btnPrimary} onClick={saveConnect}>Connect</button>
+            <button style={S.btnGhost} onClick={startDemo}>Demo Mode</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ═══════════════════════════
+     MAIN DASHBOARD
+     ═══════════════════════════ */
+  return(
+  <div style={S.page}>
+
+    {/* ── HEADER ── */}
+    <header style={S.header}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+          <rect x="2" y="14" width="5" height="12" rx="1.5" fill="#FF6B6B"/><rect x="9" y="8" width="5" height="18" rx="1.5" fill="#FCC419"/>
+          <rect x="16" y="3" width="5" height="23" rx="1.5" fill="#51CF66"/><rect x="23" y="10" width="5" height="16" rx="1.5" fill="#339AF0" opacity=".4"/>
+        </svg>
+        <span style={{fontSize:16,fontWeight:700,letterSpacing:"-.2px"}}>Finance Tracker</span>
+        {isDemo&&<span style={S.demoBadge}>DEMO</span>}
+      </div>
+      <nav style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+        {[["dashboard","Dashboard"],["leakages","Leakages"],["cards","Cards"],["txns","Transactions"]].map(([id,l])=>
+          <button key={id} onClick={()=>setTab(id)} style={{...S.tabBtn,...(tab===id?S.tabBtnActive:{})}}>{l}
+            {id==="leakages"&&leaks.length>0&&<span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:"#FF5C5C",marginLeft:5,verticalAlign:"middle"}}/>}
+          </button>
+        )}
+        <div style={S.navDiv}/>
+        {!isDemo&&<button style={S.iconBtn} onClick={fetchData} title="Refresh">↻</button>}
+        <button style={S.iconBtn} onClick={()=>{setShowSetup(true);setIsDemo(false);}} title="Settings">⚙</button>
+      </nav>
+    </header>
+
+    <div style={S.layout}>
+      {/* ── SIDEBAR ── */}
+      <aside style={S.sidebar}>
+        {[["mtd","MTD"],["ytd","YTD"],["all","All"]].map(([k,l])=>
+          <button key={k} onClick={()=>setPeriod(k)} style={{...S.sideBtn,...(period===k?S.sideBtnAct:{})}}>{l}</button>
+        )}
+        <div style={{width:24,height:1,background:"var(--border)",margin:"6px 0"}}/>
+        {MONTHS.map((m,i)=>
+          <button key={m} onClick={()=>{setPeriod("month");setSelMonth(i);}}
+            style={{...S.monthBtn,...(period==="month"&&selMonth===i?S.monthBtnAct:{}),
+              ...(i===new Date().getMonth()&&!(period==="month"&&selMonth===i)?{color:"#3DDB85"}:{})
+            }}>{m}</button>
+        )}
+      </aside>
+
+      {/* ── MAIN AREA ── */}
+      <main style={S.main}>
+        {loading&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:80,color:"#5C7089"}}>Loading...</div>}
+        {err&&!loading&&<div style={S.errBox}>{err}</div>}
+
+        {/* PERIOD INDICATOR */}
+        {!loading&&filtered.length>0&&<div style={{marginBottom:18}} className="fade-in">
+          <span style={{fontSize:11,fontWeight:800,color:"#5C7089",letterSpacing:"1px",textTransform:"uppercase"}}>{periodLabel}</span>
+          <span style={{fontSize:11,color:"#3D5068",marginLeft:8}}>·  {filtered.length} transactions</span>
+        </div>}
+
+        {/* ═══════ DASHBOARD ═══════ */}
+        {!loading&&tab==="dashboard"&&filtered.length>0&&(
+        <div className="fade-in">
+          {/* KPI Row */}
+          <div style={S.kpiGrid}>
+            <div style={{...S.kpiCard,background:"linear-gradient(135deg,#FF5C5C 0%,#ee5a24 100%)"}}>
+              <div style={S.kpiLabel}>Total Spending</div>
+              <div style={S.kpiVal}>${fmtD(stats.totalSp)}</div>
+              <div style={S.kpiSub}>{stats.spCnt} transactions</div>
+            </div>
+            <div style={S.kpiCard}>
+              <div style={S.kpiLabel}>Total Income</div>
+              <div style={{...S.kpiVal,color:"var(--green)"}}>${fmtD(stats.totalInc)}</div>
+              <div style={S.kpiSub}>{stats.incCnt} received</div>
+            </div>
+            <div style={S.kpiCard}>
+              <div style={S.kpiLabel}>Net Cashflow</div>
+              <div style={{...S.kpiVal,color:stats.net>=0?"var(--green)":"var(--red)"}}>{stats.net>=0?"+":""}${fmtD(Math.abs(stats.net))}</div>
+              <div style={S.kpiSub}>{stats.net>=0?"Surplus":"Deficit"}</div>
+            </div>
+            <div style={S.kpiCard}>
+              <div style={S.kpiLabel}>Budget Used</div>
+              <div style={{...S.kpiVal,color:budgetPct>80?"var(--red)":budgetPct>60?"var(--yellow)":"var(--green)"}}>{budgetPct.toFixed(0)}%</div>
+              <div style={{marginTop:10}}>
+                <div style={{height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{width:`${budgetPct}%`,height:"100%",borderRadius:3,
+                    background:budgetPct>80?"linear-gradient(90deg,var(--yellow),var(--red))":"linear-gradient(90deg,var(--green),#20C997)",transition:"width .5s ease"}}/>
                 </div>
-            );
+                <div style={{fontSize:10,color:"#3D5068",marginTop:4}}>${fmtD(stats.totalSp)} / ${fmtD(stats.totalInc)}</div>
+              </div>
+            </div>
+          </div>
 
-            return (
-                <div className="container">
-                    <header className="header">
-                        <div className="logo">Finance Dashboard <span style={{fontSize: '11px', color: 'var(--text-dim)'}}>FEB 2026</span></div>
-                        <button style={{background: 'var(--card)', border: '1px solid var(--border)', fontSize: '11px'}} onClick={() => setIsSetup(true)}>CONFIGURE</button>
-                    </header>
-
-                    <div className="grid">
-                        <div className="card">
-                            <div className="label">Month to Date Spend</div>
-                            <div className="val" style={{color: 'var(--neg)'}}>${stats.mtd.spend.toFixed(2)}</div>
-                            <div className="sub-val">Income: <span style={{color: 'var(--pos)'}}>${stats.mtd.income.toFixed(2)}</span></div>
-                        </div>
-                        <div className="card">
-                            <div className="label">Year to Date Spend</div>
-                            <div className="val">${stats.ytd.spend.toFixed(2)}</div>
-                            <div className="sub-val">Net: ${(stats.ytd.income - stats.ytd.spend).toFixed(2)}</div>
-                        </div>
-                        <div className="card">
-                            <div className="label">Top Category</div>
-                            <div className="val">{Object.keys(stats.catBreakdown)[0] || 'N/A'}</div>
-                            <div className="sub-val">Largest outflow this month</div>
-                        </div>
-                    </div>
-
-                    <div className="grid" style={{gridTemplateColumns: '1.2fr 1.8fr'}}>
-                        <div className="card">
-                            <div className="label">Spend Breakdown</div>
-                            <div className="chart-container"><ChartComp data={stats.catBreakdown} /></div>
-                            <div style={{marginTop: '15px'}}>
-                                {Object.entries(stats.catBreakdown).map(([c, v]) => (
-                                    <div key={c} style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '4px 0'}}>
-                                        <span>{c}</span><span style={{fontWeight: 700}}>${v.toFixed(2)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="card">
-                            <div className="label">Smart Card Optimizer</div>
-                            <p style={{fontSize: '11px', color: 'var(--text-dim)', marginBottom: '15px'}}>Based on your MTD spending patterns:</p>
-                            {stats.recs.slice(0,4).map(r => (
-                                <div key={r.name} className="rec-item">
-                                    <div>
-                                        <div style={{fontSize: '14px', fontWeight: 700}}>{r.name}</div>
-                                        <div style={{fontSize: '11px', color: r.meetsMin ? 'var(--pos)' : 'var(--neg)'}}>
-                                            {r.meetsMin ? '✓ Min spend met' : '× Below min spend'}
-                                        </div>
-                                    </div>
-                                    <div style={{textAlign: 'right'}}>
-                                        <div className="badge">+${r.potential.toFixed(2)} back</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid">
-                        <div className="card">
-                            <div className="label">Leakage Alerts (Recurring/High Freq)</div>
-                            <table>
-                                <thead><tr><th>Merchant</th><th>Count</th><th>Total Drain</th></tr></thead>
-                                <tbody>
-                                    {stats.leakages.slice(0,5).map(l => (
-                                        <tr key={l.m}>
-                                            <td>{l.m}</td>
-                                            <td>{l.count}x</td>
-                                            <td style={{fontWeight: 700}}>${l.total.toFixed(2)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+          {/* Charts Row: Spending Donut + Category List | Income Donut + Sources */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            {/* Spending breakdown */}
+            <div style={S.card}>
+              <h3 style={S.cardH}>Spending by Category</h3>
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                <div style={{flex:"1 1 180px",minWidth:160}}>
+                  <Donut data={sortedSpCats.map(([n,v])=>({name:n,value:v,color:gc(n)}))}
+                    title={{label:"Total",value:"$"+fmtK(stats.totalSp),color:"var(--red)"}}/>
                 </div>
-            );
-        }
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+                <div style={{flex:"1 1 160px",maxHeight:220,overflowY:"auto"}}>
+                  {sortedSpCats.map(([c,v])=>{
+                    const pct=stats.totalSp>0?(v/stats.totalSp*100):0;
+                    return(
+                      <div key={c} style={S.catRow}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                          <div style={{width:26,height:26,borderRadius:6,background:`${gc(c)}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{gi(c)}</div>
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:600,color:"#CBD5E1",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c}</div>
+                            <div style={{fontSize:9,color:"#3D5068"}}>{pct.toFixed(0)}%</div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:700,color:"#E2E8F0",fontVariantNumeric:"tabular-nums"}}>${fmtK(v)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Income breakdown */}
+            <div style={S.card}>
+              <h3 style={S.cardH}>Income Sources</h3>
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                <div style={{flex:"1 1 180px",minWidth:160}}>
+                  {sortedIncSources.length>0?
+                    <Donut data={sortedIncSources.map(([n,v],i)=>({name:n,value:v,color:["#3DDB85","#51CF66","#69DB7C","#94D82D","#22B8CF"][i%5]}))}
+                      title={{label:"Total",value:"$"+fmtK(stats.totalInc),color:"var(--green)"}}/>
+                    :<div style={{height:210,display:"flex",alignItems:"center",justifyContent:"center",color:"#3D5068",fontSize:13}}>No income data</div>
+                  }
+                </div>
+                <div style={{flex:"1 1 160px",maxHeight:220,overflowY:"auto"}}>
+                  {sortedIncSources.map(([m,v])=>{
+                    const pct=stats.totalInc>0?(v/stats.totalInc*100):0;
+                    return(
+                      <div key={m} style={S.catRow}>
+                        <div style={{minWidth:0,flex:1}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#CBD5E1",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m}</div>
+                          <div style={{fontSize:9,color:"#3D5068"}}>{pct.toFixed(0)}%</div>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:700,color:"var(--green)",fontVariantNumeric:"tabular-nums"}}>${fmtK(v)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Monthly Tracking */}
+          <div style={S.card}>
+            <h3 style={S.cardH}>Monthly Tracking</h3>
+            <BarComp data={stats.trend} keys={["income","spending"]} colors={["#3DDB85","#FF5C5C"]} labels={["Income","Expenses"]}/>
+          </div>
+
+          {/* Daily + Top Merchants */}
+          <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr",gap:14,marginBottom:14}}>
+            <div style={S.card}>
+              <h3 style={S.cardH}>Daily Spending (14 days)</h3>
+              <BarComp data={stats.daily} keys={["spending"]} colors={["#339AF0"]} labels={["Spent"]}/>
+            </div>
+            <div style={S.card}>
+              <h3 style={S.cardH}>Top Merchants</h3>
+              <div style={{maxHeight:260,overflowY:"auto"}}>
+                {stats.topMerch.map((m,i)=>(
+                  <div key={m.merchant} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{width:24,height:24,borderRadius:6,background:`${gc(m.cat)}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{gi(m.cat)}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#CBD5E1",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.merchant}</div>
+                      <div style={{fontSize:10,color:"#3D5068"}}>{m.count} txn{m.count>1?"s":""}</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#E2E8F0",fontVariantNumeric:"tabular-nums"}}>${fmtD(m.total)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* ═══════ LEAKAGES ═══════ */}
+        {!loading&&tab==="leakages"&&(
+        <div className="fade-in">
+          <h2 style={S.secH}>Spending Leakages</h2>
+          <p style={{color:"#5C7089",fontSize:13,marginBottom:20}}>Patterns that may indicate wasted money — filtered by <strong style={{color:"#8A9BB5"}}>{periodLabel}</strong></p>
+          {leaks.length===0?
+            <div style={S.empty}><span style={{fontSize:40}}>✅</span><div style={{marginTop:8}}>No leakages detected</div></div>
+          :(
+            <>
+              <div style={S.saveBanner}>Potential savings: <strong style={{color:"var(--green)",fontSize:18}}>${_.sumBy(leaks,"amt").toFixed(2)}</strong></div>
+              {leaks.map((l,i)=>(
+                <div key={i} style={{...S.leakItem,borderLeftColor:l.sev==="high"?"var(--red)":"var(--yellow)",animationDelay:`${i*.06}s`}} className="fade-in">
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                    <span style={{...S.sevTag,background:l.sev==="high"?"rgba(255,92,92,.12)":"rgba(250,204,21,.12)",color:l.sev==="high"?"var(--red)":"var(--yellow)"}}>{l.sev==="high"?"HIGH":"MEDIUM"}</span>
+                    <span style={{fontSize:11,color:"#3D5068"}}>~${l.amt.toFixed(0)} impact</span>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#E2E8F0",marginBottom:3}}>{l.title}</div>
+                  <div style={{fontSize:12.5,color:"#5C7089",lineHeight:1.6}}>{l.desc}</div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        )}
+
+        {/* ═══════ CARDS ═══════ */}
+        {!loading&&tab==="cards"&&(
+        <div className="fade-in">
+          <h2 style={S.secH}>Credit Card Optimiser</h2>
+          <p style={{color:"#5C7089",fontSize:13,marginBottom:20}}>Best cards for your <strong style={{color:"#8A9BB5"}}>${fmtD(stats.totalSp)}</strong> spending ({periodLabel})</p>
+          {recs.map((r,i)=>(
+            <div key={i} style={{...S.recItem,borderLeftColor:i===0?"var(--yellow)":i===1?"#ADB5BD":"var(--border)",animationDelay:`${i*.06}s`}} className="fade-in">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:16,fontWeight:800,color:i===0?"var(--yellow)":"#3D5068"}}>#{i+1}</span>
+                    <span style={{fontSize:16,fontWeight:700,color:"#E2E8F0"}}>{r.name}</span>
+                    <span style={S.bankChip}>{r.bank}</span>
+                  </div>
+                  {r.note&&<div style={{fontSize:11,color:"var(--yellow)",marginTop:3,opacity:.8}}>⚡ {r.note}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:22,fontWeight:800,color:"var(--green)"}}>${r.net.toFixed(2)}</div>
+                  <div style={{fontSize:10,color:"#3D5068"}}>net / month</div>
+                </div>
+              </div>
+              {!r.ok&&<div style={S.warnBox}>⚠ Requires min. spend of ${r.min}/month</div>}
+              {r.bens.length>0&&(
+                <div style={{marginTop:12,borderTop:"1px solid var(--border)",paddingTop:10}}>
+                  {r.bens.map((b,j)=>(
+                    <div key={j} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#5C7089",padding:"3px 0"}}>
+                      <span>{gi(b.cat)} {b.cat} ({b.rate}){b.cap?` cap $${b.cap}`:""}</span>
+                      <span style={{fontWeight:700,color:"#8A9BB5"}}>{b.earn}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{display:"flex",gap:16,marginTop:10,fontSize:11,color:"#3D5068"}}>
+                <span>Annual fee: ${r.fee}</span>
+                <span>{r.type==="cashback"?"💵 Cashback":"✈️ Miles"}</span>
+                <span>Gross: ${r.val.toFixed(2)}/mo</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        )}
+
+        {/* ═══════ TRANSACTIONS ═══════ */}
+        {!loading&&tab==="txns"&&(
+        <div className="fade-in">
+          <h2 style={S.secH}>Transactions ({filtered.length})</h2>
+          <div style={S.tableWrap}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>{["Date","Merchant","Category","Bank","Amount","Type"].map(h=>
+                <th key={h} style={S.th}>{h}</th>
+              )}</tr></thead>
+              <tbody>
+                {filtered.sort((a,b)=>b.date-a.date).slice(0,120).map((t,i)=>(
+                  <tr key={i} style={{background:i%2?"rgba(255,255,255,.015)":"transparent"}}>
+                    <td style={S.td}>{t.date.toLocaleDateString("en-SG",{day:"2-digit",month:"short"})}</td>
+                    <td style={{...S.td,fontWeight:600,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.merchant}</td>
+                    <td style={S.td}><span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:5,fontSize:10.5,fontWeight:600,background:`${gc(t.category)}14`,color:gc(t.category)}}>{gi(t.category)} {t.category}</span></td>
+                    <td style={S.td}>{t.bank}</td>
+                    <td style={{...S.td,fontWeight:700,fontVariantNumeric:"tabular-nums",color:t.type==="income"?"var(--green)":"var(--red)"}}>
+                      {t.type==="income"?"+":"-"}${t.amount.toFixed(2)}
+                      {t.currency!=="SGD"&&<span style={{fontSize:9,opacity:.5,marginLeft:2}}>{t.currency}</span>}
+                    </td>
+                    <td style={S.td}><span style={{fontSize:10,fontWeight:600,color:t.type==="income"?"var(--green)":"#3D5068",textTransform:"uppercase",letterSpacing:".4px"}}>{t.type}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
+
+        {!loading&&filtered.length===0&&!showSetup&&(
+          <div style={S.empty}><span style={{fontSize:44}}>📭</span><div style={{marginTop:8}}>No transactions for this period</div></div>
+        )}
+      </main>
+    </div>
+  </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   STYLES
+   ═══════════════════════════════════════════ */
+const S={
+  page:{minHeight:"100vh",background:"var(--bg)",color:"var(--text)"},
+  header:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 22px",borderBottom:"1px solid var(--border)",background:"rgba(11,17,32,.9)",backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:50,flexWrap:"wrap",gap:10},
+  demoBadge:{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:9,fontWeight:800,background:"rgba(250,204,21,.12)",color:"var(--yellow)",letterSpacing:".4px",marginLeft:4},
+  tabBtn:{padding:"6px 14px",background:"none",borderRadius:7,fontSize:12.5,fontWeight:600,color:"#5C7089"},
+  tabBtnActive:{background:"var(--hover)",color:"var(--text)"},
+  navDiv:{width:1,height:20,background:"var(--border)",margin:"0 4px"},
+  iconBtn:{width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",background:"var(--hover)",borderRadius:7,color:"#5C7089",fontSize:13},
+  layout:{display:"flex",minHeight:"calc(100vh - 52px)"},
+  sidebar:{width:56,borderRight:"1px solid var(--border)",padding:"14px 5px",display:"flex",flexDirection:"column",gap:3,alignItems:"center",flexShrink:0},
+  main:{flex:1,padding:"22px 26px",overflowY:"auto",maxWidth:1260},
+  sideBtn:{width:44,padding:"5px 0",background:"none",borderRadius:5,fontSize:10,fontWeight:800,color:"#3D5068",letterSpacing:".3px"},
+  sideBtnAct:{background:"var(--hover)",color:"var(--green)"},
+  monthBtn:{width:44,padding:"4px 0",background:"none",borderRadius:5,fontSize:11.5,fontWeight:500,color:"#2A3C52"},
+  monthBtnAct:{background:"var(--hover)",color:"var(--green)",fontWeight:700},
+  card:{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:20,marginBottom:14},
+  cardH:{fontSize:10.5,fontWeight:700,color:"#5C7089",marginBottom:14,textTransform:"uppercase",letterSpacing:".9px"},
+  kpiGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:14},
+  kpiCard:{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"16px 18px"},
+  kpiLabel:{fontSize:9.5,fontWeight:800,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:".9px",marginBottom:8},
+  kpiVal:{fontSize:22,fontWeight:800,letterSpacing:"-.4px",lineHeight:1},
+  kpiSub:{fontSize:10.5,color:"#3D5068",marginTop:6},
+  catRow:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid var(--border)"},
+  secH:{fontSize:20,fontWeight:800,letterSpacing:"-.3px",marginBottom:4},
+  saveBanner:{background:"rgba(61,219,133,.05)",border:"1px solid rgba(61,219,133,.1)",borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#5C7089"},
+  leakItem:{background:"var(--surface)",border:"1px solid var(--border)",borderLeft:"4px solid var(--red)",borderRadius:11,padding:"14px 18px",marginBottom:10},
+  sevTag:{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:9,fontWeight:800,letterSpacing:".5px"},
+  recItem:{background:"var(--surface)",border:"1px solid var(--border)",borderLeft:"4px solid var(--yellow)",borderRadius:11,padding:"16px 20px",marginBottom:10},
+  bankChip:{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:700,background:"rgba(255,255,255,.04)",color:"#3D5068",marginLeft:4},
+  warnBox:{background:"rgba(250,204,21,.05)",border:"1px solid rgba(250,204,21,.1)",borderRadius:7,padding:"5px 10px",fontSize:11.5,color:"var(--yellow)",marginTop:8},
+  tableWrap:{overflowX:"auto",borderRadius:11,border:"1px solid var(--border)",marginTop:14},
+  th:{padding:"9px 12px",textAlign:"left",fontSize:9,fontWeight:800,color:"#3D5068",textTransform:"uppercase",letterSpacing:".9px",background:"var(--bg)",borderBottom:"1px solid var(--border)"},
+  td:{padding:"9px 12px",fontSize:12,color:"#8A9BB5",borderBottom:"1px solid rgba(24,39,64,.4)"},
+  errBox:{background:"rgba(255,92,92,.05)",border:"1px solid rgba(255,92,92,.12)",borderRadius:9,padding:"9px 14px",color:"#FF8787",fontSize:12.5,marginBottom:14},
+  empty:{textAlign:"center",padding:"70px 20px",color:"#3D5068",fontSize:14,lineHeight:2},
+  label:{display:"block",fontSize:9.5,fontWeight:800,color:"#5C7089",textTransform:"uppercase",letterSpacing:".5px",marginBottom:5},
+  input:{width:"100%",padding:"11px 13px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:9,color:"var(--text)",fontSize:13.5,boxSizing:"border-box"},
+  btnPrimary:{flex:1,padding:"11px 22px",background:"linear-gradient(135deg,#2F8AF5,#1C6FD4)",color:"#fff",borderRadius:9,fontSize:13.5,fontWeight:700},
+  btnGhost:{flex:1,padding:"11px 22px",background:"transparent",color:"#5C7089",border:"1px solid var(--border)",borderRadius:9,fontSize:13.5,fontWeight:500},
+};
+
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
+</script>
 </body>
 </html>
