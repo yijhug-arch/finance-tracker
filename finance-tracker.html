@@ -189,11 +189,71 @@ function BarComp({data,keys,colors,labels}){
 }
 
 /* ═══════════════════════════════════════════
+   COMBO CHART — Bar (net cashflow) + Line (cumulative)
+   ═══════════════════════════════════════════ */
+function ComboChart({data}){
+  const ref=useRef(null),chart=useRef(null);
+  useEffect(()=>{
+    if(!ref.current)return;
+    if(chart.current)chart.current.destroy();
+    chart.current=new Chart(ref.current.getContext("2d"),{
+      type:"bar",
+      data:{
+        labels:data.map(d=>d.label),
+        datasets:[
+          {
+            type:"bar",label:"Net Cashflow",
+            data:data.map(d=>d.net),
+            backgroundColor:data.map(d=>d.net>=0?"rgba(61,219,133,.7)":"rgba(255,92,92,.7)"),
+            borderRadius:4,barPercentage:.55,order:2,
+            yAxisID:"y"
+          },
+          {
+            type:"line",label:"Cumulative",
+            data:data.map(d=>d.cum),
+            borderColor:"#A78BFA",backgroundColor:"rgba(167,139,250,.08)",
+            borderWidth:2.5,pointRadius:4,pointBackgroundColor:"#A78BFA",
+            pointBorderColor:"#0B1120",pointBorderWidth:2,
+            tension:.3,fill:true,order:1,
+            yAxisID:"y2"
+          }
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        interaction:{mode:"index",intersect:false},
+        scales:{
+          x:{grid:{display:false},ticks:{color:"#5C7089",font:{size:11}}},
+          y:{position:"left",grid:{color:"#182740",drawBorder:false},
+            ticks:{color:"#5C7089",font:{size:10},callback:v=>(v>=0?"+":"")+fmtK(v)},
+            title:{display:true,text:"Monthly Net",color:"#3D5068",font:{size:9,weight:600}}},
+          y2:{position:"right",grid:{display:false},
+            ticks:{color:"#A78BFA",font:{size:10},callback:v=>(v>=0?"+":"")+fmtK(v)},
+            title:{display:true,text:"Cumulative",color:"#A78BFA",font:{size:9,weight:600}}}
+        },
+        plugins:{
+          legend:{position:"bottom",labels:{color:"#8A9BB5",font:{size:11},padding:16,usePointStyle:true,pointStyleWidth:8}},
+          tooltip:{backgroundColor:"#162032",titleColor:"#E2E8F0",bodyColor:"#8A9BB5",
+            borderColor:"#243247",borderWidth:1,cornerRadius:8,padding:10,
+            callbacks:{label:ctx=>{
+              const v=ctx.raw;const sign=v>=0?"+":"";
+              return `  ${ctx.dataset.label}: ${sign}$${fmtD(Math.abs(v))}`;
+            }}}
+        },
+        animation:{duration:700}
+      }
+    });
+    return()=>{if(chart.current)chart.current.destroy()};
+  },[JSON.stringify(data)]);
+  return <div style={{height:280}}><canvas ref={ref}/></div>;
+}
+
+/* ═══════════════════════════════════════════
    DEMO DATA
    ═══════════════════════════════════════════ */
 function genDemo(){
   const now=new Date();
   const items=[
+    // Feb (current month)
     ["Din Tai Fung","Dining",45.8],["NTUC FairPrice","Groceries",67.3],["Grab","Transport",12.5],
     ["Netflix","Entertainment",15.98],["Starbucks","Dining",8.9],["Shell","Petrol",85],
     ["Guardian","Healthcare",23.4],["Shopee","Shopping",34.5],["SP Services","Utilities",120],
@@ -206,9 +266,21 @@ function genDemo(){
     ["Crystal Jade","Dining",38],["NTUC FairPrice","Groceries",82.1],["OCBC ATM","ATM Cash",200],
     ["Anthropic","Online Services",5.45],
   ];
-  return items.map(([m,c,a],i)=>{const d=new Date(now);d.setDate(d.getDate()-Math.floor(i*1.05));
+  // Generate current month
+  const txns=items.map(([m,c,a],i)=>{const d=new Date(now);d.setDate(d.getDate()-Math.floor(i*1.05));
     return{date:d,bank:["DBS","UOB","OCBC"][i%3],card:["3115","0076","4949"][i%3],merchant:m,amount:a,
       category:c,notes:"",currency:i===29?"USD":"SGD",type:c==="Income & Refunds"?"income":"spending"};});
+  // Add Jan data
+  const janItems=[["Salary","Income & Refunds",5200],["NTUC FairPrice","Groceries",95],["Grab","Transport",22],
+    ["Din Tai Fung","Dining",62],["Starbucks","Dining",7.8],["Netflix","Entertainment",15.98],
+    ["SP Services","Utilities",115],["AIA","Insurance",180],["Shell","Petrol",78],
+    ["Scoot","Travel",505.74],["Shopee","Shopping",55],["Singtel","Utilities",45],
+    ["Cold Storage","Groceries",48],["McDonald's","Dining",12],["Spotify","Entertainment",9.99],
+    ["Optimo Advertising","Advertising & Marketing",39.9],["365 Juices Bar","Dining",8],["Adobe","Online Services",28]];
+  janItems.forEach(([m,c,a],i)=>{const d=new Date(2026,0,28-i);
+    txns.push({date:d,bank:["DBS","UOB","OCBC"][i%3],card:["3115","0076","4949"][i%3],merchant:m,amount:a,
+      category:c,notes:"",currency:"SGD",type:c==="Income & Refunds"?"income":"spending"});});
+  return txns;
 }
 
 /* ═══════════════════════════════════════════
@@ -279,6 +351,12 @@ function App(){
       income:_.sumBy(items.filter(i=>i.type==="income"),"amount"),
       spending:_.sumBy(items.filter(i=>i.type!=="income"),"amount"),
     }));
+    // Cashflow trend: net per month + cumulative
+    let cumSum=0;
+    const cashflow=trend.map(m=>{
+      const net=m.income-m.spending;cumSum+=net;
+      return{label:m.label,net,cum:cumSum};
+    });
     // Daily spending last 14 days
     const daily=[];
     const last14=sp.filter(t=>t.date>=new Date(Date.now()-14*864e5));
@@ -290,7 +368,7 @@ function App(){
       merchant:m,total:_.sumBy(ts,"amount"),count:ts.length,cat:ts[0].category
     })).sort((a,b)=>b.total-a.total).slice(0,8);
     return{totalSp,totalInc,net:totalInc-totalSp,spCnt:sp.length,incCnt:inc.length,
-      spCats,incSources,trend,daily,topMerch,avg:sp.length?totalSp/sp.length:0};
+      spCats,incSources,trend,cashflow,daily,topMerch,avg:sp.length?totalSp/sp.length:0};
   },[filtered,txns]);
 
   const leaks=useMemo(()=>detectLeakages(filtered,stats.totalInc||5000),[filtered,stats.totalInc]);
@@ -348,10 +426,8 @@ function App(){
         {isDemo&&<span style={S.demoBadge}>DEMO</span>}
       </div>
       <nav style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-        {[["dashboard","Dashboard"],["leakages","Leakages"],["cards","Cards"],["txns","Transactions"]].map(([id,l])=>
-          <button key={id} onClick={()=>setTab(id)} style={{...S.tabBtn,...(tab===id?S.tabBtnActive:{})}}>{l}
-            {id==="leakages"&&leaks.length>0&&<span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:"#FF5C5C",marginLeft:5,verticalAlign:"middle"}}/>}
-          </button>
+        {[["dashboard","Dashboard"],["cards","Cards"],["txns","Transactions"]].map(([id,l])=>
+          <button key={id} onClick={()=>setTab(id)} style={{...S.tabBtn,...(tab===id?S.tabBtnActive:{})}}>{l}</button>
         )}
         <div style={S.navDiv}/>
         {!isDemo&&<button style={S.iconBtn} onClick={fetchData} title="Refresh">↻</button>}
@@ -477,10 +553,16 @@ function App(){
             </div>
           </div>
 
-          {/* Monthly Tracking */}
+          {/* Monthly Tracking: Income vs Expenses */}
           <div style={S.card}>
-            <h3 style={S.cardH}>Monthly Tracking</h3>
+            <h3 style={S.cardH}>Monthly Tracking — Income & Expenses</h3>
             <BarComp data={stats.trend} keys={["income","spending"]} colors={["#3DDB85","#FF5C5C"]} labels={["Income","Expenses"]}/>
+          </div>
+
+          {/* Monthly Net Cashflow Combo Chart */}
+          <div style={S.card}>
+            <h3 style={S.cardH}>Monthly Net Cashflow</h3>
+            <ComboChart data={stats.cashflow}/>
           </div>
 
           {/* Daily + Top Merchants */}
@@ -505,30 +587,27 @@ function App(){
               </div>
             </div>
           </div>
-        </div>
-        )}
 
-        {/* ═══════ LEAKAGES ═══════ */}
-        {!loading&&tab==="leakages"&&(
-        <div className="fade-in">
-          <h2 style={S.secH}>Spending Leakages</h2>
-          <p style={{color:"#5C7089",fontSize:13,marginBottom:20}}>Patterns that may indicate wasted money — filtered by <strong style={{color:"#8A9BB5"}}>{periodLabel}</strong></p>
-          {leaks.length===0?
-            <div style={S.empty}><span style={{fontSize:40}}>✅</span><div style={{marginTop:8}}>No leakages detected</div></div>
-          :(
-            <>
-              <div style={S.saveBanner}>Potential savings: <strong style={{color:"var(--green)",fontSize:18}}>${_.sumBy(leaks,"amt").toFixed(2)}</strong></div>
+          {/* ── Leakage Alerts (inline on dashboard) ── */}
+          {leaks.length>0&&(
+            <div style={S.card}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h3 style={{...S.cardH,marginBottom:0}}>⚠️ Spending Leakages</h3>
+                <div style={{fontSize:12,color:"var(--green)",fontWeight:700}}>Potential savings: ${_.sumBy(leaks,"amt").toFixed(2)}</div>
+              </div>
               {leaks.map((l,i)=>(
-                <div key={i} style={{...S.leakItem,borderLeftColor:l.sev==="high"?"var(--red)":"var(--yellow)",animationDelay:`${i*.06}s`}} className="fade-in">
-                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
-                    <span style={{...S.sevTag,background:l.sev==="high"?"rgba(255,92,92,.12)":"rgba(250,204,21,.12)",color:l.sev==="high"?"var(--red)":"var(--yellow)"}}>{l.sev==="high"?"HIGH":"MEDIUM"}</span>
-                    <span style={{fontSize:11,color:"#3D5068"}}>~${l.amt.toFixed(0)} impact</span>
+                <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none"}}>
+                  <span style={{...S.sevTag,marginTop:2,flexShrink:0,
+                    background:l.sev==="high"?"rgba(255,92,92,.12)":"rgba(250,204,21,.12)",
+                    color:l.sev==="high"?"var(--red)":"var(--yellow)"}}>{l.sev==="high"?"HIGH":"MED"}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#E2E8F0"}}>{l.title}</div>
+                    <div style={{fontSize:11.5,color:"#5C7089",lineHeight:1.5,marginTop:2}}>{l.desc}</div>
                   </div>
-                  <div style={{fontSize:14,fontWeight:700,color:"#E2E8F0",marginBottom:3}}>{l.title}</div>
-                  <div style={{fontSize:12.5,color:"#5C7089",lineHeight:1.6}}>{l.desc}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"var(--red)",whiteSpace:"nowrap",flexShrink:0}}>~${l.amt.toFixed(0)}</div>
                 </div>
               ))}
-            </>
+            </div>
           )}
         </div>
         )}
