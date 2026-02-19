@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker - SG 2026</title>
+    <title>Finance Tracker 2026</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -13,42 +13,35 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-        body { margin: 0; padding: 0; background: #0C1220; color: #E2E8F0; font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
-        * { box-sizing: border-box; }
-        .setup-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .card { background: #111D2E; border: 1px solid #1B2A3D; border-radius: 16px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-        h2 { margin-top: 0; font-weight: 800; color: #339AF0; font-size: 24px; }
-        label { display: block; font-size: 10px; font-weight: 800; color: #5A6B80; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; }
-        input { width: 100%; padding: 14px; margin-bottom: 20px; background: #0C1220; border: 1px solid #1B2A3D; border-radius: 10px; color: white; outline: none; transition: border-color 0.2s; }
-        input:focus { border-color: #339AF0; }
-        button { width: 100%; padding: 14px; background: #339AF0; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: transform 0.1s; }
-        button:active { transform: scale(0.98); }
-        .loading-text { color: #5A6B80; font-size: 14px; text-align: center; margin-top: 100px; }
+        body { margin: 0; background: #0C1220; color: #E2E8F0; font-family: 'DM Sans', sans-serif; }
+        .loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; color: #5A6B80; }
+        .setup-card { background: #111D2E; border: 1px solid #1B2A3D; border-radius: 16px; padding: 30px; width: 100%; max-width: 400px; margin: 100px auto; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #0C1220; border: 1px solid #1B2A3D; border-radius: 8px; color: white; }
+        button { width: 100%; padding: 12px; background: #339AF0; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div id="root">
-        <div class="loading-text">Initializing Finance Engine...</div>
+        <div class="loading-screen">Initializing Finance Engine...</div>
     </div>
 
     <script type="text/babel">
-        // SAFETY: Wait for all libraries to exist in the window object
-        const init = () => {
-            if (!window.Recharts || !window.React) {
-                setTimeout(init, 100);
+        // SAFETY WRAPPER: Wait for libraries to be ready
+        const startApp = () => {
+            if (typeof React === 'undefined' || typeof Recharts === 'undefined') {
+                setTimeout(startApp, 100); // Check again in 100ms
                 return;
             }
 
-            const { useState, useEffect, useMemo } = React;
-            const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } = Recharts;
+            const { useState, useEffect } = React;
+            const { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } = Recharts;
 
             function App() {
                 const [sid, setSid] = useState(localStorage.getItem("ft_sid") || "");
                 const [apiKey, setApiKey] = useState(localStorage.getItem("ft_key") || "");
                 const [isSetup, setIsSetup] = useState(!localStorage.getItem("ft_sid"));
 
-                const handleSave = () => {
-                    if (!sid || !apiKey) return alert("Please fill in both fields");
+                const saveConfigs = () => {
                     localStorage.setItem("ft_sid", sid);
                     localStorage.setItem("ft_key", apiKey);
                     setIsSetup(false);
@@ -56,41 +49,24 @@
 
                 if (isSetup) {
                     return (
-                        <div className="setup-container">
-                            <div className="card">
-                                <h2>Finance Tracker</h2>
-                                <p style={{color: '#8A9BB5', fontSize: 13, marginBottom: 25}}>Connect your Google Sheet to begin.</p>
-                                
-                                <label>Google Sheet ID</label>
-                                <input 
-                                    placeholder="e.g. 1aBcDeFgHiJkLmNoP" 
-                                    value={sid} 
-                                    onChange={e => setSid(e.target.value)} 
-                                />
-                                
-                                <label>Google API Key</label>
-                                <input 
-                                    placeholder="Paste API Key here" 
-                                    type="password" 
-                                    value={apiKey} 
-                                    onChange={e => setApiKey(e.target.value)} 
-                                />
-                                
-                                <button onClick={handleSave}>Launch Dashboard</button>
-                            </div>
+                        <div className="setup-card">
+                            <h2 style={{color: '#339AF0'}}>Finance Tracker</h2>
+                            <p style={{fontSize: '12px', color: '#8A9BB5'}}>Connect your Google Sheet</p>
+                            <input placeholder="Sheet ID" value={sid} onChange={e => setSid(e.target.value)} />
+                            <input placeholder="API Key" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} />
+                            <button onClick={saveConfigs}>Connect Dashboard</button>
                         </div>
                     );
                 }
 
                 return (
-                    <div style={{padding: '40px 20px', maxWidth: '1000px', margin: '0 auto'}}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30}}>
-                            <h1 style={{fontSize: 24, fontWeight: 800, margin: 0}}>Dashboard</h1>
-                            <button onClick={() => setIsSetup(true)} style={{width: 'auto', padding: '8px 16px', fontSize: 12, background: '#1B2A3D'}}>Settings</button>
-                        </div>
-                        <div className="card" style={{maxWidth: 'none'}}>
-                            <p style={{textAlign: 'center', color: '#5A6B80'}}>Data engine connected. Fetching transactions from Sheet...</p>
-                            {/* The rest of your charts and spending logic goes here */}
+                    <div style={{padding: '40px', textAlign: 'center'}}>
+                        <h1>Dashboard Active</h1>
+                        <p style={{color: '#51CF66'}}>✓ Connected to Google Sheets Engine</p>
+                        <button onClick={() => setIsSetup(true)} style={{width: 'auto', padding: '10px 20px', background: '#1B2A3D'}}>Settings</button>
+                        
+                        <div style={{marginTop: '40px', height: '300px', background: '#111D2E', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                            <p style={{color: '#5A6B80'}}>Graph and Leakage data will appear here once data is fetched.</p>
                         </div>
                     </div>
                 );
@@ -100,8 +76,7 @@
             root.render(<App />);
         };
 
-        // Start the initialization check
-        init();
+        startApp();
     </script>
 </body>
 </html>
